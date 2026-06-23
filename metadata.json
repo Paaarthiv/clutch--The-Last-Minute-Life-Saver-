@@ -1,0 +1,10 @@
+{
+  "name": "Clutch",
+  "description": "Autonomous AI productivity agent that plans your day and manages deadlines.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

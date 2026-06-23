@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-canvas-base: #F0EEE7;
+  --color-canvas-raised: #FAF8F3;
+  --color-canvas-card: #FFFFFF;
+
+  --color-brand-start: #20808D;
+  --color-brand-end: #13565F;
+
+  --color-text-primary: #13343B;
+  --color-text-secondary: #5B6B6E;
+  --color-text-muted: #9AA7A9;
+
+  --color-accent: #20808D;
+
+  --color-line: #E6E3DC;
+  --color-glow: rgba(32, 128, 141, 0.12);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+
+  --pplx-bg: #F0EEE7;
+  --pplx-surface: #FFFFFF;
+  --pplx-ink: #13343B;
+  --pplx-muted: #5B6B6E;
+  --pplx-teal: #20808D;
+  --pplx-teal-dark: #13565F;
+  --pplx-teal-tint: #E8F2F1;
+  --pplx-border: #E6E3DC;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  @apply bg-canvas-base text-text-primary font-sans antialiased overflow-x-hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Tailwind v4 no longer defaults buttons to a pointer — restore it for all enabled controls */
+button:not(:disabled),
+[role="button"],
+select:not(:disabled),
+summary,
+label[for] {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(19, 52, 59, 0.18); border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(19, 52, 59, 0.3); }
+::-webkit-scrollbar { width: 0px; background: transparent; }
+
+.bg-brand-gradient { background: linear-gradient(135deg, var(--color-brand-start), var(--color-brand-end)); }
+.text-brand-gradient {
+  background: linear-gradient(135deg, var(--color-brand-start), var(--color-brand-end));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.border-brand-gradient { border-image: linear-gradient(135deg, var(--color-brand-start), var(--color-brand-end)) 1; }
+
+.glass-panel {
+  background: var(--color-canvas-card);
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+}
+
+.glass-card {
+  background: var(--color-canvas-card);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.glass-card:hover {
+  border-color: rgba(32, 128, 141, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(19, 52, 59, 0.08), 0 0 0 1px rgba(32, 128, 141, 0.05);
+}
+
+.glass-bar {
+  background: var(--color-canvas-card);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.glass-bar:focus-within {
+  border-color: rgba(32, 128, 141, 0.55);
+  box-shadow: 0 0 0 3px rgba(32, 128, 141, 0.10);
+}
+
+.pill {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.timeline-line { position: absolute; left: 45px; top: 0; bottom: 0; width: 1px; background: var(--color-line); }
+.now-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--color-accent); z-index: 10; }
+.now-line::before {
+  content: ''; position: absolute; left: 41px; top: -4px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--color-accent); box-shadow: 0 0 8px var(--color-accent);
+}
+
+.font-display { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; }
+
+/* ===== Animation layer (light-adapted) ===== */
+@keyframes breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 0.9; transform: translateX(-50%) scale(1.18); }
+}
+.ambient-glow {
+  position: absolute; top: -120px; left: 50%; transform: translateX(-50%);
+  width: 640px; height: 440px;
+  background: radial-gradient(circle, var(--color-glow) 0%, transparent 70%);
+  z-index: 0; pointer-events: none; animation: breathe 9s ease-in-out infinite;
+}
+@keyframes breathe2 {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%      { opacity: 0.7; transform: scale(1.15); }
+}
+.ambient-glow-2 {
+  position: fixed; bottom: -180px; right: -120px; width: 520px; height: 520px;
+  background: radial-gradient(circle, rgba(32, 128, 141, 0.10) 0%, transparent 70%);
+  z-index: 0; pointer-events: none; animation: breathe2 13s ease-in-out infinite;
+}
+
+.orb {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-brand-start) 0%, var(--color-brand-end) 100%);
+  box-shadow: 0 0 20px rgba(32, 128, 141, 0.4); position: relative;
+}
+.orb::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid rgba(32, 128, 141, 0.4); }
+
+.agent-orb {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-brand-start), var(--color-brand-end));
+  box-shadow: 0 0 10px rgba(32, 128, 141, 0.5); flex-shrink: 0;
+}
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(32, 128, 141, 0.5), 0 0 10px rgba(32, 128, 141, 0.5); }
+  70%  { box-shadow: 0 0 0 12px rgba(32, 128, 141, 0), 0 0 10px rgba(32, 128, 141, 0.5); }
+  100% { box-shadow: 0 0 0 0 rgba(32, 128, 141, 0), 0 0 10px rgba(32, 128, 141, 0.5); }
+}
+.agent-orb.thinking { animation: pulse-ring 1.4s ease-out infinite; }
+
+@keyframes shimmer { 0% { background-position: -460px 0; } 100% { background-position: 460px 0; } }
+.shimmer {
+  background: linear-gradient(90deg, rgba(19,52,59,0.04) 25%, rgba(19,52,59,0.09) 50%, rgba(19,52,59,0.04) 75%);
+  background-size: 920px 100%; animation: shimmer 1.6s linear infinite; border-radius: 6px;
+}
+
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-glow, .ambient-glow-2, .agent-orb.thinking, .shimmer { animation: none !important; }
+  .glass-card { transition: border-color 0.2s ease; }
+  .glass-card:hover { transform: none; }
+}
