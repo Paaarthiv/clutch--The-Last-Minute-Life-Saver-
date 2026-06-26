@@ -199,7 +199,7 @@ function normalizeContext(context: any) {
           estimated_minutes: clampNumber(task?.estimated_minutes, 30, 1, 1440),
           deadline: toSafeString(task?.deadline, 120) || undefined,
           importance: Math.trunc(clampNumber(task?.importance, 3, 1, 5)),
-          status: ["idle", "done", "dropped"].includes(task?.status) ? task.status : "idle",
+          status: ["idle", "done", "dropped", "archived"].includes(task?.status) ? task.status : "idle",
           category: ["NOW", "NEXT", "LATER"].includes(task?.category) ? task.category : "LATER",
           reason: toSafeString(task?.reason, 240),
           createdAt: Number.isFinite(task?.createdAt) ? task.createdAt : Date.now(),

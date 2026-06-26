@@ -22,7 +22,8 @@ interface AgentContextType extends AppState {
   setTasks: React.Dispatch<React.SetStateAction<PrioritizedTask[]>>;
   setSchedule: React.Dispatch<React.SetStateAction<ScheduledBlock[]>>;
   executeAgentAction: (text: string, contextOverride?: any, actionTrigger?: string) => Promise<void>;
-  markTaskStatus: (taskId: string, status: "done" | "dropped") => void;
+  markTaskStatus: (taskId: string, status: "idle" | "done" | "dropped" | "archived") => void;
+  archiveTask: (id: string) => void;
   resolveReplan: (approved: boolean) => void;
   dismissIntro: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
@@ -167,9 +168,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const markTaskStatus = (taskId: string, status: "done" | "dropped") => {
+  const markTaskStatus = (taskId: string, status: "idle" | "done" | "dropped" | "archived") => {
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status } : t));
-    addActivity(`Marked a task as ${status}.`);
+    if (status !== "idle") {
+      setSchedule((prev) => prev.filter((block) => block.taskId !== taskId));
+    }
+    addActivity(status === "idle" ? "Restored a task to active." : `Moved a task to ${status}.`);
     // Proactively replan if dropped or taking long...
     // For simplicity, we just trigger it if they drop something or mark it done.
     if (status === "dropped") {
@@ -205,9 +209,19 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     setSettings((prev) => ({ ...prev, ...patch }));
   };
 
+  const archiveTask = (id: string) => {
+    setTasks((prev) => prev.map((t) => (
+      t.id === id || (t as any).parentId === id ? { ...t, status: "archived" } : t
+    )));
+    setSchedule((prev) => prev.filter((block) => block.taskId !== id));
+    addActivity("Archived a task.");
+  };
+
   // Restore a done/dropped task back to active (local only — no Gemini).
   const restoreTask = (id: string) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: "idle" } : t)));
+    setTasks((prev) => prev.map((t) => (
+      t.id === id || (t as any).parentId === id ? { ...t, status: "idle" } : t
+    )));
     addActivity("Restored a task.");
   };
 
@@ -232,7 +246,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       tasks, setTasks, schedule, setSchedule, activityFeed,
       isThinking, replanState, hasSeenIntro, settings,
       executeAgentAction, markTaskStatus, resolveReplan, dismissIntro,
-      updateSettings, restoreTask, deleteTask, clearAllData, goHome
+      updateSettings, archiveTask, restoreTask, deleteTask, clearAllData, goHome
     }}>
       {children}
     </AgentContext.Provider>

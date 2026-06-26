@@ -4,7 +4,7 @@ export interface Task {
   estimated_minutes: number;
   deadline?: string;
   importance: number; // 1-5
-  status: "idle" | "done" | "dropped";
+  status: "idle" | "done" | "dropped" | "archived";
   createdAt: number;
   parentId?: string;
 }

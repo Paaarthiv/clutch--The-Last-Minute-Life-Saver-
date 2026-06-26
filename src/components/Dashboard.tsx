@@ -15,7 +15,7 @@ interface TaskCardProps {
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
-  const { markTaskStatus, executeAgentAction, isThinking } = useAgent();
+  const { markTaskStatus, archiveTask, executeAgentAction, isThinking } = useAgent();
   const isDone = task.status === "done";
   const subtasks = allTasks ? allTasks.filter((t) => t.parentId === task.id) : [];
   
@@ -37,13 +37,22 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
           <div className={clsx("text-sm font-semibold leading-tight", isDone && "line-through")}>{task.title}</div>
           {task.reason && <div className="text-[11px] text-[#9AA7A9] mt-1 leading-snug">{task.reason}</div>}
         </div>
-        <button
-          onClick={() => markTaskStatus(task.id, isDone ? "idle" : "done")}
-          title={isDone ? "Mark as not done" : "Mark as done"}
-          className="shrink-0 text-[#13343B]/40 hover:text-[#13343B] transition-colors"
-        >
-          {isDone ? <CheckCircle2 className="w-[18px] h-[18px] text-[#34D399]" /> : <Circle className="w-[18px] h-[18px]" />}
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => markTaskStatus(task.id, isDone ? "idle" : "done")}
+            title={isDone ? "Mark as not done" : "Mark as done"}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#13343B]/40 hover:text-[#13343B] hover:bg-black/[0.04] transition-colors"
+          >
+            {isDone ? <CheckCircle2 className="w-[18px] h-[18px] text-[#34D399]" /> : <Circle className="w-[18px] h-[18px]" />}
+          </button>
+          <button
+            onClick={() => archiveTask(task.id)}
+            title="Archive task"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#13343B]/35 hover:text-[#20808D] hover:bg-[#20808D]/10 transition-colors"
+          >
+            <Archive className="w-[17px] h-[17px]" />
+          </button>
+        </div>
       </div>
 
       {subtasks.length > 0 && (
@@ -97,8 +106,8 @@ const CLOUD_PILLS: CloudPill[] = [
 function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
   const { tasks, isThinking, executeAgentAction, settings } = useAgent();
   const categories = ["NOW", "NEXT", "LATER"] as const;
-  const hasTasks = tasks.some((t) => t.status !== "dropped");
-  const activeCount = tasks.filter((t) => t.status !== "dropped" && !t.parentId).length;
+  const hasTasks = tasks.some((t) => t.status === "idle");
+  const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
 
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -283,7 +292,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
                 </div>
               )}
               {categories.map((cat) => {
-                const catTasks = tasks.filter((t) => t.category === cat && t.status !== "dropped" && !t.parentId);
+                const catTasks = tasks.filter((t) => t.category === cat && t.status === "idle" && !t.parentId);
                 if (catTasks.length === 0) return null;
                 return (
                   <div key={cat} className="space-y-3">
@@ -741,17 +750,25 @@ function LeftSidebar({ activeView, setActiveView, onNewTask }: { activeView: Vie
 
 function ArchiveView() {
   const { tasks, restoreTask, deleteTask } = useAgent();
-  const archivedTasks = tasks.filter(t => t.status === 'done' || t.status === 'dropped').sort((a, b) => b.createdAt - a.createdAt);
+  const archivedTasks = tasks
+    .filter(t => t.status === 'done' || t.status === 'dropped' || t.status === 'archived')
+    .sort((a, b) => b.createdAt - a.createdAt);
+  const statusClass = (status: string) => {
+    if (status === "done") return "bg-[#34D399]/20 text-[#0F8A5F]";
+    if (status === "dropped") return "bg-[#FF4D4D]/20 text-[#D93636]";
+    return "bg-[#20808D]/12 text-[#20808D]";
+  };
 
   return (
     <main className="flex-1 flex flex-col px-4 md:px-8 py-6 relative z-10 overflow-hidden">
       <div className="w-full max-w-4xl mx-auto flex flex-col h-full">
         <div className="flex-1 glass-card overflow-y-auto w-full custom-scrollbar p-6">
            {archivedTasks.length === 0 ? (
-             <div className="text-center py-20 flex flex-col items-center justify-center h-full">
-               <Archive className="w-12 h-12 text-[#13343B]/20 mb-4" />
-               <p className="text-[#5B6B6E]">No archived tasks yet.</p>
-             </div>
+              <div className="text-center py-20 flex flex-col items-center justify-center h-full">
+                <Archive className="w-12 h-12 text-[#13343B]/20 mb-4" />
+                <p className="text-[#5B6B6E]">No archived tasks yet.</p>
+                <p className="text-[#9AA7A9] text-xs mt-1">Archive or complete tasks from Priorities to build your history.</p>
+              </div>
            ) : (
              <div className="space-y-2">
                {archivedTasks.map(task => (
@@ -760,16 +777,14 @@ function ArchiveView() {
                      <div className="text-[#9AA7A9] text-[10px] font-mono tracking-widest uppercase shrink-0 w-16">
                        {format(task.createdAt, "MMM d")}
                      </div>
-                     <div className={clsx("text-sm font-semibold truncate", task.status === 'dropped' ? "text-[#5B6B6E] line-through" : "text-[#13343B]")}>
-                       {task.title}
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-2 shrink-0">
-                     <div className={clsx("text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded",
-                       task.status === 'done' ? "bg-[#34D399]/20 text-[#34D399]" : "bg-[#FF4D4D]/20 text-[#FF4D4D]"
-                     )}>
-                       {task.status}
-                     </div>
+                      <div className={clsx("text-sm font-semibold truncate", task.status === 'dropped' ? "text-[#5B6B6E] line-through" : "text-[#13343B]")}>
+                        {task.title}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className={clsx("text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded", statusClass(task.status))}>
+                        {task.status}
+                      </div>
                      <button onClick={() => restoreTask(task.id)} title="Restore to active" className="p-1.5 rounded-lg text-[#5B6B6E] hover:text-[#13343B] hover:bg-black/[0.05] transition-colors">
                        <RotateCcw className="w-4 h-4" />
                      </button>
