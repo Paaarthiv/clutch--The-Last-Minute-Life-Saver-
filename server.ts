@@ -41,8 +41,9 @@ const createTasksDeclaration: FunctionDeclaration = {
             estimated_minutes: { type: Type.NUMBER },
             deadline: { type: Type.STRING, description: "ISO string or human readable like 'Today 5pm'" },
             importance: { type: Type.NUMBER, description: "1-5 scale, 5 is most important" },
+            cognitive_load: { type: Type.STRING, enum: ["deep", "light", "admin"], description: "Mental energy this task needs: 'deep' = hard focus (studying, writing, coding), 'light' = moderate, 'admin' = low-effort chores (emails, errands, calls)." },
           },
-          required: ["title", "estimated_minutes", "importance"],
+          required: ["title", "estimated_minutes", "importance", "cognitive_load"],
         },
       },
     },
@@ -143,6 +144,34 @@ const replanDeclaration: FunctionDeclaration = {
   },
 };
 
+// Clutch Mode — the panic button. Ruthless triage when the user is overwhelmed/behind.
+const rescueTriageDeclaration: FunctionDeclaration = {
+  name: "rescue_triage",
+  description: "Triage the user's tasks when they are overwhelmed or out of time. Decide the few things that truly matter before their deadline, what to do only if time remains, and what to let go of.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      message: { type: Type.STRING, description: "One short, calm, reassuring sentence. e.g. 'Breathe — here's how you land the essentials.'" },
+      firstStep: { type: Type.STRING, description: "ONE concrete physical action to start in the next 5 minutes. e.g. 'Open the slide deck and finish slide 4.'" },
+      doNow: {
+        type: Type.ARRAY,
+        description: "The 2-3 highest-impact tasks that MUST get done before the deadline.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            taskId: { type: Type.STRING },
+            reason: { type: Type.STRING, description: "Short why-this-matters (max ~8 words)." },
+          },
+          required: ["taskId", "reason"],
+        },
+      },
+      ifTime: { type: Type.ARRAY, items: { type: Type.STRING }, description: "taskIds to do only if time is left after the must-dos." },
+      dropForNow: { type: Type.ARRAY, items: { type: Type.STRING }, description: "taskIds to consciously let go of for now — permission to not do these." },
+    },
+    required: ["message", "firstStep", "doNow", "ifTime", "dropForNow"],
+  },
+};
+
 // Model is configurable via GEMINI_MODEL in .env.local (no code edit needed to switch).
 // Default is a free-tier model; set GEMINI_MODEL=gemini-2.5-flash once billing is enabled
 // for stronger, more reliable multi-step agent behavior.
@@ -199,6 +228,7 @@ function normalizeContext(context: any) {
           estimated_minutes: clampNumber(task?.estimated_minutes, 30, 1, 1440),
           deadline: toSafeString(task?.deadline, 120) || undefined,
           importance: Math.trunc(clampNumber(task?.importance, 3, 1, 5)),
+          cognitiveLoad: coerceLoad(task?.cognitiveLoad),
           status: ["idle", "done", "dropped", "archived"].includes(task?.status) ? task.status : "idle",
           category: ["NOW", "NEXT", "LATER"].includes(task?.category) ? task.category : "LATER",
           reason: toSafeString(task?.reason, 240),
@@ -218,12 +248,17 @@ function normalizeContext(context: any) {
   };
 }
 
+function coerceLoad(value: unknown): "deep" | "light" | "admin" {
+  return value === "deep" || value === "admin" ? value : "light";
+}
+
 function normalizeGeneratedTask(task: any) {
   return {
     title: toSafeString(task?.title, 180) || "Untitled task",
     estimated_minutes: clampNumber(task?.estimated_minutes, 30, 1, 1440),
     deadline: toSafeString(task?.deadline, 120) || undefined,
     importance: Math.trunc(clampNumber(task?.importance, 3, 1, 5)),
+    cognitiveLoad: coerceLoad(task?.cognitive_load),
     id: crypto.randomUUID(),
     status: "idle",
     category: "LATER",
@@ -237,6 +272,7 @@ function normalizeGeneratedSubtask(subtask: any, goalTitle: string, parentTaskId
     title: toSafeString(subtask?.title, 180) || "Untitled step",
     estimated_minutes: clampNumber(subtask?.estimated_minutes, 30, 1, 1440),
     order: clampNumber(subtask?.order, 0, 0, 1000),
+    cognitiveLoad: coerceLoad(subtask?.cognitive_load),
     id: crypto.randomUUID(),
     status: "idle",
     category: "NEXT",
@@ -392,7 +428,8 @@ async function startServer() {
   // Agent Endpoint
   app.post("/api/agent", async (req, res) => {
     try {
-      const { text, context, actionTrigger, now, workStart, workEnd } = req.body;
+      const { text, context, actionTrigger, now, workStart, workEnd, peakStart, peakEnd, mode } = req.body;
+      const isRescue = mode === "rescue";
       const safeText = toSafeString(text, MAX_AGENT_TEXT_CHARS);
       const safeActionTrigger = toSafeString(actionTrigger, MAX_ACTION_TRIGGER_CHARS);
 
@@ -413,6 +450,7 @@ async function startServer() {
       };
       let activityLog: string[] = [];
       let replan = null;
+      let rescue = null;
       let finalMessage = "";
       const breakdownTarget = getBreakdownTarget(safeText || safeActionTrigger, state.tasks);
 
@@ -420,6 +458,8 @@ async function startServer() {
       // (never schedule blocks in the past) and stay within their configured working hours.
       const startH = coerceHour(workStart, 9);
       const endH = coerceHour(workEnd, 18);
+      const peakStartH = coerceHour(peakStart, 9);
+      const peakEndH = coerceHour(peakEnd, 12);
       const pad = (n: number) => String(n).padStart(2, "0");
       const nowTime: string = typeof now === "string" && /^\d{1,2}:\d{2}$/.test(now)
         ? now
@@ -428,11 +468,22 @@ async function startServer() {
 
       let systemInstruction = `You are Clutch, a premium autonomous AI productivity agent. You help the user plan their day, break down goals, and beat deadlines.
 You do NOT just generate text. You call tools to update the user's state directly.
+For EVERY task you create, set its cognitive_load: 'deep' for hard-focus work (studying, writing, coding, designing), 'admin' for low-effort chores (emails, errands, quick calls, payments), 'light' otherwise.
 When the user asks to break down an existing task, you MUST call breakdown_goal with 3-6 concrete, ordered subtasks. Do not ask the user for subtasks. Use the exact parentTaskId if one is provided.
-When the user adds or changes tasks, in the SAME turn you MUST: (1) call create_tasks, then after you receive the created tasks with their ids, (2) call prioritize over ALL current tasks assigning each a category of NOW, NEXT, or LATER with a short one-line reason, then (3) call schedule_blocks to time-block EVERY task into the day, avoiding overlaps.
-SCHEDULING TIME RULES (critical): Schedule ALL tasks — NOW first, then NEXT, then LATER — so every task gets a time block (none should be left off the plan). The user's current local time is ${nowTime}. Working hours are ${fmtH(startH)}–${fmtH(endH)}. Schedule the first block starting at the LATER of the current time (${nowTime}) or ${fmtH(startH)} — NEVER schedule a block earlier than the current time. Pack blocks back-to-back from there, in 24h HH:mm. Prefer to fit everything within working hours, but if the day runs out of time you may continue past ${fmtH(endH)} so that LATER tasks still appear on the plan.
+When the user adds or changes tasks, in the SAME turn you MUST: (1) call create_tasks, then after you receive the created tasks with their ids, (2) call prioritize over ALL current tasks assigning each a category of NOW, NEXT, or LATER with a short one-line reason. The day's time-blocked plan is built automatically from your priorities (NOW first, then NEXT, then LATER), so you do NOT schedule times yourself — just get the categories and ordering right. The user's current local time is ${nowTime} and working hours are ${fmtH(startH)}–${fmtH(endH)}; factor that into urgency.
 Always use the EXACT task ids you were given. Only use replan when the user reports being late or drops a task.
 Be efficient: call each tool AT MOST ONCE per request. Do not repeat a tool you have already called this turn.`;
+
+      if (isRescue) {
+        systemInstruction = `You are Clutch in RESCUE MODE. The user is overwhelmed or running out of time and hit the panic button. Their current local time is ${nowTime} and their day ends at ${fmtH(endH)}.
+Call rescue_triage EXACTLY ONCE and nothing else. Be ruthless but calm and reassuring.
+- doNow: ONLY the 2-3 highest-impact tasks they can realistically finish before their deadline (respect deadlines and importance). Give a short reason for each.
+- ifTime: tasks worth doing only if time remains after the must-dos.
+- dropForNow: everything else — explicitly give them permission to let these go for now.
+- firstStep: one tiny, concrete physical action to start in the next 5 minutes.
+- message: one short, warm, steadying sentence.
+Use the EXACT task ids from the current state. Do not create, prioritize, schedule, or replan in this turn.`;
+      }
 
       if (breakdownTarget) {
         systemInstruction += `\n\nBREAKDOWN REQUEST MODE: The user clicked Break down for this existing task: ${JSON.stringify(breakdownTarget)}. In this turn, call breakdown_goal exactly once. Use parentTaskId "${breakdownTarget.id}" and goalTitle "${breakdownTarget.title}". Create practical subtasks that add up roughly to the parent estimate when possible. Do not call create_tasks for this request and do not ask a follow-up question.`;
@@ -457,13 +508,14 @@ Be efficient: call each tool AT MOST ONCE per request. Do not repeat a tool you 
             systemInstruction: dynamicInstruction,
             tools: [
               {
-                functionDeclarations: [
-                  createTasksDeclaration,
-                  breakdownGoalDeclaration,
-                  prioritizeDeclaration,
-                  scheduleBlocksDeclaration,
-                  replanDeclaration,
-                ],
+                functionDeclarations: isRescue
+                  ? [rescueTriageDeclaration]
+                  : [
+                      createTasksDeclaration,
+                      breakdownGoalDeclaration,
+                      prioritizeDeclaration,
+                      replanDeclaration,
+                    ],
               },
             ],
             temperature: 0.2, // Low temperature for deterministic planning
@@ -588,6 +640,29 @@ Be efficient: call each tool AT MOST ONCE per request. Do not repeat a tool you 
                   response: { success: true }
                 }
               });
+            } else if (call.name === "rescue_triage") {
+              const knownIds = new Set(state.tasks.map((task: any) => task.id));
+              const cleanIds = (ids: any) => (Array.isArray(ids) ? ids : [])
+                .map((id: any) => toSafeString(id, 100))
+                .filter((id: string) => knownIds.has(id));
+              const doNow = (Array.isArray(args.doNow) ? args.doNow : [])
+                .map((d: any) => ({ taskId: toSafeString(d?.taskId, 100), reason: toSafeString(d?.reason, 120) }))
+                .filter((d: any) => knownIds.has(d.taskId))
+                .slice(0, 4);
+              rescue = {
+                message: toSafeString(args.message, 240),
+                firstStep: toSafeString(args.firstStep, 240),
+                doNow,
+                ifTime: cleanIds(args.ifTime),
+                dropForNow: cleanIds(args.dropForNow),
+              };
+              activityLog.push("Ran Clutch Mode triage.");
+              functionResponses.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { success: true }
+                }
+              });
             }
           } catch (e) {
             functionResponses.push({
@@ -610,6 +685,7 @@ Be efficient: call each tool AT MOST ONCE per request. Do not repeat a tool you 
         tasks: state.tasks,
         schedule: state.schedule,
         replan,
+        rescue,
         activity: activityLog,
         message: finalMessage,
       });

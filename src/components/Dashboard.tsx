@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAgent } from "../AgentContext";
 import { ScheduledBlock } from "../types";
-import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, X, Check } from "lucide-react";
+import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, X, Check, Zap, BatteryLow, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { format } from "date-fns";
 import clsx from "clsx";
@@ -12,6 +12,69 @@ import { ClutchLogo } from "./ClutchLogo";
 interface TaskCardProps {
   task: any;
   allTasks?: any[];
+}
+
+const LOAD_META: Record<string, { label: string; color: string; bg: string }> = {
+  deep: { label: "Deep focus", color: "#C2410C", bg: "rgba(234,88,12,0.10)" },
+  light: { label: "Light", color: "#1E7B86", bg: "rgba(32,128,141,0.10)" },
+  admin: { label: "Admin", color: "#6B7B7D", bg: "rgba(107,123,125,0.12)" },
+};
+
+function LoadBadge({ load }: { load?: string }) {
+  if (!load || !LOAD_META[load]) return null;
+  const m = LOAD_META[load];
+  return (
+    <span className="inline-flex items-center text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ color: m.color, background: m.bg }}>
+      {m.label}
+    </span>
+  );
+}
+
+// A small "!" badge that reveals a detailed feature explanation on hover/focus (or tap).
+function InfoHint({ title, tone, children }: { title: string; tone: "onDark" | "onLight"; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+  const W = 280;
+
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - W / 2), window.innerWidth - W - 8);
+    setPos({ left, bottom: window.innerHeight - r.top + 8 });
+  };
+  const show = () => { place(); setOpen(true); };
+
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={`About ${title}`}
+        onMouseEnter={show}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={show}
+        onBlur={() => setOpen(false)}
+        onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : show(); }}
+        className={clsx(
+          "w-[18px] h-[18px] rounded-full text-[11px] font-extrabold leading-none flex items-center justify-center transition-transform hover:scale-110 shadow-[0_2px_6px_rgba(19,52,59,0.25)]",
+          tone === "onDark" ? "bg-white/90 text-[#13565F]" : "bg-[#20808D] text-white"
+        )}
+      >
+        !
+      </button>
+      {open && pos && createPortal(
+        <div
+          style={{ position: "fixed", left: pos.left, bottom: pos.bottom, width: W, zIndex: 100 }}
+          className="rounded-xl bg-[#13343B] text-white/90 p-3.5 shadow-[0_18px_44px_rgba(19,52,59,0.32)] text-[12px] leading-relaxed pointer-events-none"
+        >
+          <div className="font-bold text-[#9FE1CB] mb-1.5">{title}</div>
+          {children}
+        </div>,
+        document.body
+      )}
+    </>
+  );
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
@@ -32,6 +95,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
             <span className="text-[10px] font-bold uppercase tracking-widest tabular-nums" style={{ color: catColor }}>{task.estimated_minutes}m</span>
             <span className="w-1 h-1 rounded-full bg-[#C2CACB]" />
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#9AA7A9]">{task.category}</span>
+            <LoadBadge load={(task as any).cognitiveLoad} />
             {task.deadline && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] truncate">· Due {task.deadline}</span>}
           </div>
           <div className={clsx("text-sm font-semibold leading-tight", isDone && "line-through")}>{task.title}</div>
@@ -104,19 +168,20 @@ const CLOUD_PILLS: CloudPill[] = [
 ];
 
 function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
-  const { tasks, isThinking, executeAgentAction, settings } = useAgent();
-  const categories = ["NOW", "NEXT", "LATER"] as const;
+  const { tasks, isThinking, executeAgentAction, runRescue, settings } = useAgent();
   const hasTasks = tasks.some((t) => t.status === "idle");
-  const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
+
+  const lowEnergy = () => {
+    if (isThinking || !hasTasks) return;
+    executeAgentAction(
+      "",
+      undefined,
+      "I'm low on energy right now. Re-prioritize so easy, low-effort tasks (admin/light cognitive_load) come first to build momentum, and push deep-focus tasks to later or my peak hours. Then reschedule everything. Do NOT create any new tasks."
+    );
+  };
 
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [prioOpen, setPrioOpen] = useState(false);
-
-  useEffect(() => {
-    document.body.classList.toggle("priority-modal-open", prioOpen);
-    return () => document.body.classList.remove("priority-modal-open");
-  }, [prioOpen]);
 
   const addSuggestion = (s: string) => {
     setInput((prev) => (prev.trim() ? `${prev.replace(/\s*,?\s*$/, "")}, ${s}` : s));
@@ -150,20 +215,10 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
     setInput("");
   };
 
-  const reprioritize = () => {
-    if (isThinking || !hasTasks) return;
-    executeAgentAction(
-      "",
-      undefined,
-      "Re-evaluate ALL of my existing tasks together and re-prioritize them now by urgency and importance — assign each NOW, NEXT, or LATER with a fresh one-line reason — then rebuild today's time-blocked schedule from the current time. Do NOT create any new tasks."
-    );
-  };
-
   return (
-    <>
-    <div className="w-full xl:flex-1 flex flex-col items-center gap-3 xl:h-full min-h-0 xl:py-4 overflow-hidden">
+    <div className="w-full xl:flex-1 flex flex-col items-center gap-3 xl:h-full min-h-0 xl:py-4">
       {/* Scattered "tap to add" task pills — pretty, messy cloud that fills the space */}
-      <div className="relative w-full flex-1 min-h-[260px]">
+      <div className="relative w-full flex-1 min-h-[260px] overflow-hidden">
         <div className="absolute left-1/2 top-2 -translate-x-1/2 text-[11px] uppercase tracking-[0.18em] text-[#9AA7A9] font-semibold whitespace-nowrap">
           Tap a task to add it
         </div>
@@ -215,35 +270,88 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
         </div>
       </form>
 
-      {/* Priorities toggle button + description */}
-      <div className="w-full max-w-[480px] shrink-0">
-        <button
-          onClick={() => setPrioOpen((o) => !o)}
-          className="w-full glass-bar px-4 py-3 flex items-center justify-between hover:border-[#20808D]/40 transition-colors"
-        >
-          <div className="flex items-center gap-2.5">
-            <LayoutDashboard className="w-4 h-4 text-[#20808D]" />
-            <span className="text-sm font-semibold text-[#13343B]">Priorities</span>
-            {activeCount > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{activeCount}</span>}
+      {/* Clutch Mode + low-energy quick actions */}
+      {hasTasks && (
+        <div className="w-full max-w-[480px] shrink-0 flex gap-2">
+          <div className="relative flex-1">
+            <button
+              onClick={runRescue}
+              disabled={isThinking}
+              className="clutch-glow w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-[#20808D] to-[#13565F] hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50"
+            >
+              <Zap className="w-4 h-4" /> Clutch Mode
+            </button>
+            <div className="absolute -top-2 -right-2 z-20">
+              <InfoHint title="Clutch Mode — your panic button" tone="onDark">
+                For when you're overwhelmed or out of time. Clutch triages everything down to the <span className="font-bold text-white">2–3 things that truly matter</span> before your deadline, says what to drop guilt-free, and gives you one tiny first step.
+                <span className="block mt-1.5 text-white/70">Use it the night before a deadline, when your list feels impossible, or any "I don't know where to start" moment.</span>
+              </InfoHint>
+            </div>
           </div>
-          <ChevronDown className="w-4 h-4 text-[#9AA7A9]" />
-        </button>
-        <p className="text-[11px] text-[#9AA7A9] leading-relaxed mt-2 px-1">
-          Open your ranked tasks — Clutch sorts them <span className="font-semibold text-[#5B6B6E]">NOW · NEXT · LATER</span> and lets you <span className="font-semibold text-[#20808D]">break down</span> big ones into steps.
-        </p>
-      </div>
-
+          <div className="relative">
+            <button
+              onClick={lowEnergy}
+              disabled={isThinking}
+              className="flex items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#13565F] bg-white border border-[#E6E3DC] hover:border-[#20808D]/50 active:scale-[0.98] transition disabled:opacity-50"
+            >
+              <BatteryLow className="w-4 h-4 text-[#20808D]" /> <span className="hidden sm:inline">I'm wiped</span>
+            </button>
+            <div className="absolute -top-2 -right-2 z-20">
+              <InfoHint title="I'm wiped — low-energy mode" tone="onLight">
+                Re-sorts your day so <span className="font-bold text-white">quick, low-effort tasks come first</span> to build momentum, and pushes deep-focus work to later or your peak hours.
+                <span className="block mt-1.5 text-white/70">Use it when you're tired, distracted, or struggling to start — small wins first.</span>
+              </InfoHint>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
 
-    {/* Priorities — wide centered panel, closes on click-away */}
+// The Priorities button + description — now sits above the Today's Plan box.
+function PrioritiesBar({ prioOpen, setPrioOpen, count }: { prioOpen: boolean; setPrioOpen: (v: boolean) => void; count: number }) {
+  return (
+    <div className="w-full shrink-0">
+      <button
+        onClick={() => setPrioOpen(!prioOpen)}
+        className="w-full glass-bar px-4 py-3 flex items-center justify-between hover:border-[#20808D]/40 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <LayoutDashboard className="w-4 h-4 text-[#20808D]" />
+          <span className="text-sm font-semibold text-[#13343B]">Priorities</span>
+          {count > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{count}</span>}
+        </div>
+        <ChevronDown className={clsx("w-4 h-4 text-[#9AA7A9] transition-transform", prioOpen && "rotate-180")} />
+      </button>
+      <p className="text-[11px] text-[#9AA7A9] leading-relaxed mt-2 px-1">
+        Open your ranked tasks — Clutch sorts them <span className="font-semibold text-[#5B6B6E]">NOW · NEXT · LATER</span> and lets you <span className="font-semibold text-[#20808D]">break down</span> big ones into steps.
+      </p>
+    </div>
+  );
+}
+
+// The wide Priorities panel (modal), closes on click-away.
+function PrioritiesPanel({ prioOpen, setPrioOpen }: { prioOpen: boolean; setPrioOpen: (v: boolean) => void }) {
+  const { tasks, isThinking, executeAgentAction } = useAgent();
+  const categories = ["NOW", "NEXT", "LATER"] as const;
+  const hasTasks = tasks.some((t) => t.status === "idle");
+  const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
+
+  const reprioritize = () => {
+    if (isThinking || !hasTasks) return;
+    executeAgentAction(
+      "",
+      undefined,
+      "Re-evaluate ALL of my existing tasks together and re-prioritize them now by urgency and importance — assign each NOW, NEXT, or LATER with a fresh one-line reason. Do NOT create any new tasks."
+    );
+  };
+
+  return (
     <AnimatePresence>
       {prioOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setPrioOpen(false)}
-            className="absolute inset-0 bg-[#13343B]/45"
-          />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setPrioOpen(false)} className="absolute inset-0 bg-[#13343B]/45" />
           <motion.div
             initial={{ opacity: 0, scale: 0.97, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -264,12 +372,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {hasTasks && (
-                  <button
-                    onClick={reprioritize}
-                    disabled={isThinking}
-                    title="Re-evaluate and re-rank all tasks together"
-                    className="flex items-center gap-1.5 text-[11px] font-semibold text-[#20808D] hover:text-[#13565F] disabled:opacity-50 transition-colors px-2 py-1.5 rounded-lg hover:bg-[#20808D]/5"
-                  >
+                  <button onClick={reprioritize} disabled={isThinking} title="Re-evaluate and re-rank all tasks together" className="flex items-center gap-1.5 text-[11px] font-semibold text-[#20808D] hover:text-[#13565F] disabled:opacity-50 transition-colors px-2 py-1.5 rounded-lg hover:bg-[#20808D]/5">
                     <RotateCcw className={clsx("w-3.5 h-3.5", isThinking && "animate-spin")} />
                     <span className="hidden sm:inline">Re-prioritize</span>
                   </button>
@@ -313,7 +416,30 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
         </div>
       )}
     </AnimatePresence>
-    </>
+  );
+}
+
+// The Today board: chat on the left; Priorities bar + plan in the middle; activity on the right.
+function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
+  const { tasks } = useAgent();
+  const [prioOpen, setPrioOpen] = useState(false);
+  const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
+
+  useEffect(() => {
+    document.body.classList.toggle("priority-modal-open", prioOpen);
+    return () => document.body.classList.remove("priority-modal-open");
+  }, [prioOpen]);
+
+  return (
+    <div className="flex-1 flex flex-col xl:flex-row gap-6 px-4 md:px-8 py-6 h-full overflow-y-auto xl:overflow-hidden custom-scrollbar">
+      <PrioritiesColumn inputRef={inputRef} />
+      <div className="w-full xl:w-[500px] xl:shrink-0 flex flex-col gap-3 min-h-0 xl:h-full">
+        <PrioritiesBar prioOpen={prioOpen} setPrioOpen={setPrioOpen} count={activeCount} />
+        <TimelineColumn />
+      </div>
+      <AgentActivityFeed />
+      <PrioritiesPanel prioOpen={prioOpen} setPrioOpen={setPrioOpen} />
+    </div>
   );
 }
 
@@ -382,6 +508,58 @@ function fmtDur(mins: number): string {
 
 // A clean agenda timeline. A list never overlaps, so dense back-to-back micro-blocks stay
 // perfectly legible — unlike a proportional grid that has to squeeze 5-minute blocks.
+// "Now" focus companion — kills time-blindness by always answering "what do I do this minute?"
+function NowCard() {
+  const { schedule, executeAgentAction, isThinking } = useAgent();
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const now = new Date();
+  const nowDec = now.getHours() + now.getMinutes() / 60;
+  const blocks = schedule
+    .map((b) => ({ b, start: parseTimeStr(b.startTime), end: Math.max(parseTimeStr(b.startTime) + 0.05, parseTimeStr(b.endTime)) }))
+    .sort((a, z) => a.start - z.start);
+  const current = blocks.find((x) => nowDec >= x.start && nowDec < x.end);
+  const next = blocks.find((x) => x.start > nowDec);
+  if (!current && !next) return null;
+
+  const minsLeft = current ? Math.max(0, Math.round((current.end - nowDec) * 60)) : 0;
+  const pct = current ? Math.min(100, Math.max(0, ((nowDec - current.start) / (current.end - current.start)) * 100)) : 0;
+  const runningOver = () => {
+    if (isThinking) return;
+    executeAgentAction("", undefined, "I'm running over on my current task. Re-plan the rest of my day starting from the current time — keep what still fits, push or drop the rest. Do not create new tasks.");
+  };
+
+  return (
+    <div className="mb-4 rounded-2xl border border-[#20808D]/30 bg-gradient-to-br from-[#E8F4F4] to-white p-4 shrink-0">
+      {current ? (
+        <>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#20808D] animate-pulse" /> Now · until {fmt12(current.end)}</span>
+            <span className="text-[11px] font-bold tabular-nums text-[#13565F]">{minsLeft}m left</span>
+          </div>
+          <div className="text-base font-semibold text-[#13343B] leading-tight">{current.b.title}</div>
+          <div className="h-1.5 w-full bg-black/[0.06] rounded-full overflow-hidden mt-2.5">
+            <div className="h-full bg-[#20808D] rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="flex items-center justify-between mt-2.5 gap-2">
+            <span className="text-[11px] text-[#5B6B6E] truncate">{next ? `Next · ${next.b.title}` : "Last block of the day"}</span>
+            <button onClick={runningOver} disabled={isThinking} className="text-[11px] font-semibold text-[#C2410C] hover:text-[#9A330A] disabled:opacity-50 shrink-0">Running over?</button>
+          </div>
+        </>
+      ) : next ? (
+        <>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-[#9AA7A9] mb-1">Up next · {fmt12(next.start)}</div>
+          <div className="text-base font-semibold text-[#13343B] leading-tight">{next.b.title}</div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function TimelineColumn() {
   const { schedule } = useAgent();
 
@@ -393,13 +571,14 @@ function TimelineColumn() {
   const nowDec = now.getHours() + now.getMinutes() / 60;
 
   return (
-    <div className="w-full xl:w-[500px] xl:shrink-0 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[520px] xl:min-h-0">
+    <div className="w-full xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[420px] xl:min-h-0">
       <div className="p-4 border-b border-[#E6E3DC] flex justify-between items-center bg-black/[0.025] shrink-0 z-10">
         <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
         <span className="text-[10px] text-[#20808D] font-bold">{schedule.length} Block(s) Scheduled</span>
       </div>
 
       <div className="timeline-scroll flex-1 overflow-y-auto w-full custom-scrollbar p-4">
+        <NowCard />
         {blocks.length === 0 ? (
           <div className="h-full min-h-[360px] flex flex-col items-center justify-center text-center">
             <Calendar className="w-8 h-8 text-[#13343B]/20 mb-3" />
@@ -646,6 +825,71 @@ function ReplanModal() {
           >
             Approve Plan
           </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function RescueModal() {
+  const { tasks, rescueState, applyRescue } = useAgent();
+  if (!rescueState) return null;
+  const getTitle = (id: string) => tasks.find((t: any) => t.id === id)?.title || "Task";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#13343B]/55">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="glass-card w-full max-w-lg border-[#E0DCD3] max-h-[88vh] flex flex-col p-0 overflow-hidden"
+      >
+        <div className="p-6 pb-5 bg-gradient-to-br from-[#FFF3EC] to-white border-b border-[#F0E2D8] shrink-0">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#E0602C] to-[#C2410C] flex items-center justify-center shadow-[0_6px_16px_rgba(194,65,12,0.3)]">
+              <Zap className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-lg font-display font-bold text-[#13343B]">Clutch Mode</h2>
+          </div>
+          <p className="text-[15px] text-[#5B6B6E] leading-relaxed">{rescueState.message}</p>
+        </div>
+
+        <div className="p-6 overflow-y-auto custom-scrollbar space-y-5">
+          {rescueState.firstStep && (
+            <div className="rounded-xl bg-[#20808D]/[0.08] border border-[#20808D]/25 p-4">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] mb-1 flex items-center gap-1.5"><ArrowRight className="w-3.5 h-3.5" /> Start here, right now</div>
+              <div className="text-sm font-semibold text-[#13343B]">{rescueState.firstStep}</div>
+            </div>
+          )}
+          {rescueState.doNow.length > 0 && (
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-[#C2410C] mb-2">Do now · {rescueState.doNow.length}</div>
+              <div className="space-y-2">
+                {rescueState.doNow.map((d) => (
+                  <div key={d.taskId} className="rounded-xl border border-[#E6E3DC] bg-white p-3">
+                    <div className="text-sm font-semibold text-[#13343B]">{getTitle(d.taskId)}</div>
+                    {d.reason && <div className="text-[11px] text-[#9AA7A9] mt-0.5">{d.reason}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {rescueState.ifTime.length > 0 && (
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-[#9AA7A9] mb-2">If time allows</div>
+              <ul className="space-y-1 text-sm text-[#5B6B6E]">{rescueState.ifTime.map((id) => <li key={id}>• {getTitle(id)}</li>)}</ul>
+            </div>
+          )}
+          {rescueState.dropForNow.length > 0 && (
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-[#9AA7A9] mb-2">Let go of — for now</div>
+              <ul className="space-y-1 text-sm text-[#9AA7A9] line-through">{rescueState.dropForNow.map((id) => <li key={id}>• {getTitle(id)}</li>)}</ul>
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 border-t border-[#EDEAE2] flex justify-end gap-3 shrink-0">
+          <button onClick={() => applyRescue(false)} className="px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-widest text-[#5B6B6E] hover:text-[#13343B] border border-[#E6E3DC] bg-black/[0.03] transition-colors">Dismiss</button>
+          <button onClick={() => applyRescue(true)} className="px-5 py-2 rounded-lg text-[11px] font-bold uppercase tracking-widest text-white bg-gradient-to-r from-[#E0602C] to-[#C2410C] active:scale-95 shadow-[0_8px_20px_rgba(194,65,12,0.28)] transition">Apply this plan</button>
         </div>
       </motion.div>
     </div>
@@ -1366,6 +1610,21 @@ function SettingsView() {
               <Dropdown value={settings.workEnd} onChange={(v) => updateSettings({ workEnd: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
             </div>
           </div>
+
+          <div className="pt-2 border-t border-[#ECE9E1]">
+            <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Peak energy window</div>
+            <p className="text-[12px] text-[#5B6B6E] mt-1 mb-3">When you focus best. Clutch schedules deep-focus tasks here and busywork outside it.</p>
+            <div className="flex items-start gap-4">
+              <div className="flex-1">
+                <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">Peak start</label>
+                <Dropdown value={settings.peakStart} onChange={(v) => updateSettings({ peakStart: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">Peak end</label>
+                <Dropdown value={settings.peakEnd} onChange={(v) => updateSettings({ peakEnd: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="glass-card p-6 flex items-center justify-between">
@@ -1435,13 +1694,7 @@ export function Dashboard() {
         </header>
 
         <main className="flex-1 overflow-hidden flex flex-col relative z-10">
-          {activeView === 'today' && (
-            <div className="flex-1 flex flex-col xl:flex-row gap-6 px-4 md:px-8 py-6 h-full overflow-y-auto xl:overflow-hidden custom-scrollbar">
-              <PrioritiesColumn inputRef={inputRef} />
-              <TimelineColumn />
-              <AgentActivityFeed />
-            </div>
-          )}
+          {activeView === 'today' && <TodayBoard inputRef={inputRef} />}
           {activeView !== 'today' && (
             <motion.div
               key={activeView}
@@ -1460,6 +1713,7 @@ export function Dashboard() {
       </div>
 
       <ReplanModal />
+      <RescueModal />
     </div>
   );
 }

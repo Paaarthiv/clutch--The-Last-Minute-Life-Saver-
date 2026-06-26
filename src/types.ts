@@ -1,9 +1,12 @@
+export type CognitiveLoad = "deep" | "light" | "admin";
+
 export interface Task {
   id: string;
   title: string;
   estimated_minutes: number;
   deadline?: string;
   importance: number; // 1-5
+  cognitiveLoad?: CognitiveLoad;
   status: "idle" | "done" | "dropped" | "archived";
   createdAt: number;
   parentId?: string;
@@ -38,4 +41,12 @@ export interface ReplanState {
   keep: string[];
   move: string[];
   drop: string[];
+}
+
+export interface RescueState {
+  message: string;
+  firstStep: string;
+  doNow: { taskId: string; reason: string }[];
+  ifTime: string[];
+  dropForNow: string[];
 }

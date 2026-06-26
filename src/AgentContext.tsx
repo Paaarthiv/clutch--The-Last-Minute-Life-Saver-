@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { PrioritizedTask, ScheduledBlock, AgentAction, ReplanState } from "./types";
+import { PrioritizedTask, ScheduledBlock, AgentAction, ReplanState, RescueState } from "./types";
 
 export interface Settings {
   workStart: number; // hour, 0-23
   workEnd: number;   // hour, 0-23
+  peakStart: number; // peak-energy window start hour
+  peakEnd: number;   // peak-energy window end hour
   voiceEnabled: boolean;
 }
-const DEFAULT_SETTINGS: Settings = { workStart: 9, workEnd: 18, voiceEnabled: true };
+const DEFAULT_SETTINGS: Settings = { workStart: 9, workEnd: 18, peakStart: 9, peakEnd: 12, voiceEnabled: true };
 
 interface AppState {
   tasks: PrioritizedTask[];
@@ -14,6 +16,7 @@ interface AppState {
   activityFeed: AgentAction[];
   isThinking: boolean;
   replanState: ReplanState | null;
+  rescueState: RescueState | null;
   hasSeenIntro: boolean;
   settings: Settings;
 }
@@ -21,10 +24,12 @@ interface AppState {
 interface AgentContextType extends AppState {
   setTasks: React.Dispatch<React.SetStateAction<PrioritizedTask[]>>;
   setSchedule: React.Dispatch<React.SetStateAction<ScheduledBlock[]>>;
-  executeAgentAction: (text: string, contextOverride?: any, actionTrigger?: string) => Promise<void>;
+  executeAgentAction: (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue" }) => Promise<void>;
   markTaskStatus: (taskId: string, status: "idle" | "done" | "dropped" | "archived") => void;
   archiveTask: (id: string) => void;
   resolveReplan: (approved: boolean) => void;
+  runRescue: () => void;
+  applyRescue: (approved: boolean) => void;
   dismissIntro: () => void;
   updateSettings: (patch: Partial<Settings>) => void;
   restoreTask: (id: string) => void;
@@ -41,6 +46,50 @@ function friendlyAgentError(raw: string): string {
   if (/503|UNAVAILABLE|overload|high demand|busy/i.test(raw)) return "The model is busy right now — please try again.";
   if (/api[_ ]?key|invalid|permission|\b401\b|\b403\b/i.test(raw)) return "API key/permission issue — check your Gemini key.";
   return "The agent hit an error — please try again.";
+}
+
+function fmtHM(dec: number): string {
+  let total = Math.round(dec * 60);
+  total = Math.max(0, Math.min(23 * 60 + 59, total));
+  const h = Math.floor(total / 60), m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// Deterministic local scheduler: the Today's Plan is always derived from the prioritized tasks,
+// so it re-syncs the instant priorities change — no Gemini call needed. Orders NOW → NEXT → LATER,
+// then by importance, then deep-focus first (light energy bias), and packs from the current time.
+function buildSchedule(tasks: PrioritizedTask[], settings: Settings): ScheduledBlock[] {
+  const active = (tasks || []).filter((t) => t && t.status === "idle");
+  const activeIds = new Set(active.map((t) => t.id));
+  // If a parent has active subtasks, schedule the subtasks instead of the parent.
+  const parentsWithChild = new Set(
+    active.filter((t) => t.parentId && activeIds.has(t.parentId)).map((t) => t.parentId as string)
+  );
+  const schedulable = active.filter((t) => !parentsWithChild.has(t.id));
+
+  const catRank = (c: string) => (c === "NOW" ? 0 : c === "NEXT" ? 1 : 2);
+  const loadRank = (l?: string) => (l === "deep" ? 0 : l === "light" ? 1 : 2);
+  schedulable.sort((a, b) =>
+    catRank(a.category) - catRank(b.category) ||
+    (b.importance || 0) - (a.importance || 0) ||
+    loadRank(a.cognitiveLoad) - loadRank(b.cognitiveLoad) ||
+    (a.createdAt || 0) - (b.createdAt || 0)
+  );
+
+  const startH = Math.min(settings.workStart, settings.workEnd);
+  const d = new Date();
+  const nowDec = d.getHours() + d.getMinutes() / 60;
+  let cursor = Math.max(startH, Math.ceil(nowDec * 12) / 12); // round up to the next 5 minutes
+
+  const blocks: ScheduledBlock[] = [];
+  for (const t of schedulable) {
+    if (cursor >= 24) break;
+    const dur = Math.max(5, t.estimated_minutes || 30) / 60;
+    const end = Math.min(24, cursor + dur);
+    blocks.push({ taskId: t.id, title: t.title, startTime: fmtHM(cursor), endTime: fmtHM(end) });
+    cursor = end;
+  }
+  return blocks;
 }
 
 const AgentContext = createContext<AgentContextType | undefined>(undefined);
@@ -80,6 +129,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   const [isThinking, setIsThinking] = useState(false);
   const [replanState, setReplanState] = useState<ReplanState | null>(null);
+  const [rescueState, setRescueState] = useState<RescueState | null>(null);
 
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -113,7 +163,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
-  const executeAgentAction = async (text: string, contextOverride?: any, actionTrigger?: string) => {
+  const executeAgentAction = async (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue" }) => {
     setIsThinking(true);
     try {
       const currentContext = contextOverride || { tasks, schedule };
@@ -129,6 +179,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           now: nowStr,
           workStart: settings.workStart,
           workEnd: settings.workEnd,
+          peakStart: settings.peakStart,
+          peakEnd: settings.peakEnd,
+          mode: opts?.mode,
         }),
       });
       const data = await res.json();
@@ -140,12 +193,14 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
       if (data.tasks) {
         setTasks(data.tasks);
-      }
-      if (data.schedule) {
-        setSchedule(data.schedule);
+        // The plan is always a local derivation of the latest priorities, so it stays in sync.
+        setSchedule(buildSchedule(data.tasks, settings));
       }
       if (data.replan) {
         setReplanState(data.replan);
+      }
+      if (data.rescue) {
+        setRescueState(data.rescue);
       }
       if (data.activity && Array.isArray(data.activity)) {
         setActivityFeed((prev) => {
@@ -169,35 +224,59 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   };
 
   const markTaskStatus = (taskId: string, status: "idle" | "done" | "dropped" | "archived") => {
-    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status } : t));
-    if (status !== "idle") {
-      setSchedule((prev) => prev.filter((block) => block.taskId !== taskId));
-    }
+    const next = tasks.map((t) => (t.id === taskId ? { ...t, status } : t));
+    setTasks(next);
+    // Re-pack the plan from the remaining active tasks so it tightens up as you finish/drop.
+    setSchedule(buildSchedule(next, settings));
     addActivity(status === "idle" ? "Restored a task to active." : `Moved a task to ${status}.`);
-    // Proactively replan if dropped or taking long...
-    // For simplicity, we just trigger it if they drop something or mark it done.
-    if (status === "dropped") {
-      executeAgentAction("", undefined, `User dropped task ${taskId}. Do we need to replan?`);
-    } else if (status === "done") {
-        // Just let them be done, no replan unless requested.
-    }
   };
 
   const resolveReplan = (approved: boolean) => {
     if (approved && replanState) {
-       setTasks((prev) => {
-         return prev.map(t => {
-           if (replanState.drop.includes(t.id)) return { ...t, status: "dropped" };
-           // move to tomorrow = category LATER or dropped for today
-           if (replanState.move.includes(t.id)) return { ...t, category: "LATER" };
-           return t;
-         })
+       const next = tasks.map((t) => {
+         if (replanState.drop.includes(t.id)) return { ...t, status: "dropped" as const };
+         // move to tomorrow = category LATER for today
+         if (replanState.move.includes(t.id)) return { ...t, category: "LATER" as const };
+         return t;
        });
+       setTasks(next);
+       setSchedule(buildSchedule(next, settings));
        addActivity("Applied re-plan updates.");
     } else {
        addActivity("User rejected the re-plan.");
     }
     setReplanState(null);
+  };
+
+  // Clutch Mode — fire a rescue-triage request. The agent triages against the time left.
+  const runRescue = () => {
+    if (isThinking) return;
+    executeAgentAction(
+      "",
+      undefined,
+      "RESCUE: I'm overwhelmed and short on time. Triage my tasks — what must I do now, what can wait, what should I drop?",
+      { mode: "rescue" }
+    );
+  };
+
+  // Apply (or dismiss) the rescue plan: must-dos become NOW, "if time" become LATER,
+  // dropped tasks are set to dropped and pulled off the schedule.
+  const applyRescue = (approved: boolean) => {
+    if (approved && rescueState) {
+      const nowIds = new Set(rescueState.doNow.map((d) => d.taskId));
+      const laterIds = new Set(rescueState.ifTime);
+      const dropIds = new Set(rescueState.dropForNow);
+      const next = tasks.map((t) => {
+        if (nowIds.has(t.id)) return { ...t, status: "idle" as const, category: "NOW" as const };
+        if (laterIds.has(t.id)) return { ...t, category: "LATER" as const };
+        if (dropIds.has(t.id)) return { ...t, status: "dropped" as const };
+        return t;
+      });
+      setTasks(next);
+      setSchedule(buildSchedule(next, settings));
+      addActivity("Applied Clutch Mode rescue plan.");
+    }
+    setRescueState(null);
   };
 
   const dismissIntro = () => setHasSeenIntro(true);
@@ -244,8 +323,8 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   return (
     <AgentContext.Provider value={{
       tasks, setTasks, schedule, setSchedule, activityFeed,
-      isThinking, replanState, hasSeenIntro, settings,
-      executeAgentAction, markTaskStatus, resolveReplan, dismissIntro,
+      isThinking, replanState, rescueState, hasSeenIntro, settings,
+      executeAgentAction, markTaskStatus, resolveReplan, runRescue, applyRescue, dismissIntro,
       updateSettings, archiveTask, restoreTask, deleteTask, clearAllData, goHome
     }}>
       {children}

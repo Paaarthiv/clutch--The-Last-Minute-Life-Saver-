@@ -178,6 +178,32 @@ button:disabled {
   transform: translateY(-1px);
 }
 
+/* Clutch Mode button — breathing teal glow + a light that runs around the border */
+@property --clutch-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@keyframes clutchSpin { to { --clutch-angle: 360deg; } }
+@keyframes clutchPulse {
+  0%, 100% { box-shadow: 0 6px 18px rgba(32, 128, 141, 0.30), 0 0 0 0 rgba(32, 128, 141, 0); }
+  50%      { box-shadow: 0 8px 22px rgba(32, 128, 141, 0.42), 0 0 16px 1px rgba(32, 128, 141, 0.45); }
+}
+.clutch-glow {
+  position: relative;
+  isolation: isolate;
+  animation: clutchPulse 2.6s ease-in-out infinite;
+}
+.clutch-glow::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  z-index: -1;
+  background: conic-gradient(from var(--clutch-angle), transparent 0deg, transparent 220deg, rgba(127, 227, 236, 0.85) 285deg, #ffffff 310deg, rgba(127, 227, 236, 0.85) 335deg, transparent 360deg);
+  animation: clutchSpin 3s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .clutch-glow { animation: none; }
+  .clutch-glow::before { animation: none; }
+}
+
 /* Scattered task-pill cloud — gentle bob, rotation held via the --rot custom property */
 @keyframes pillFloat {
   0%, 100% { transform: rotate(var(--rot, 0deg)) translateY(0); }
