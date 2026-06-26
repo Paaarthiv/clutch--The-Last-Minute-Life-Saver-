@@ -84,6 +84,19 @@ button:disabled {
   transform: translateY(-2px);
   box-shadow: 0 10px 30px rgba(19, 52, 59, 0.08), 0 0 0 1px rgba(32, 128, 141, 0.05);
 }
+.priority-modal-panel,
+.priority-modal-panel:hover {
+  transform: none;
+  box-shadow: none;
+}
+.priority-modal-panel {
+  contain: layout paint style;
+}
+.priority-scroll {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
 
 .glass-bar {
   background: var(--color-canvas-card);
@@ -113,6 +126,67 @@ button:disabled {
 }
 
 .font-display { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; }
+
+/* Soft teal glow around the capture bar (subtle, breathing) */
+.capture-glow { position: relative; }
+.capture-glow::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 24px;
+  background: radial-gradient(60% 120% at 50% 50%, rgba(32, 128, 141, 0.18) 0%, rgba(32, 128, 141, 0.06) 40%, transparent 72%);
+  filter: blur(10px);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.65;
+  animation: captureGlow 6s ease-in-out infinite;
+}
+@keyframes captureGlow {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.8; }
+}
+.capture-glow:focus-within::before { opacity: 0.95; }
+
+/* Quick-add suggestion pills above the capture bar */
+.suggest-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-canvas-card);
+  border: 1px solid var(--color-line);
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+.suggest-pill:hover {
+  color: var(--pplx-teal-dark);
+  border-color: rgba(32, 128, 141, 0.45);
+  background: var(--pplx-teal-tint);
+  transform: translateY(-1px);
+}
+
+/* Scattered task-pill cloud — gentle bob, rotation held via the --rot custom property */
+@keyframes pillFloat {
+  0%, 100% { transform: rotate(var(--rot, 0deg)) translateY(0); }
+  50%      { transform: rotate(var(--rot, 0deg)) translateY(-5px); }
+}
+.pill-float { animation: pillFloat var(--dur, 6s) ease-in-out var(--delay, 0s) infinite; }
+.pill-float:hover { animation-play-state: paused; }
+.priority-modal-open .pill-float,
+.priority-modal-open .capture-glow::before,
+.priority-modal-open .ambient-glow,
+.priority-modal-open .ambient-glow-2,
+.priority-modal-open .agent-orb.thinking {
+  animation-play-state: paused !important;
+}
+@media (prefers-reduced-motion: reduce) { .pill-float { animation: none !important; } }
+
+/* Obsidian/n8n-style node canvas backdrop (dot grid) */
+.node-canvas {
+  background-color: #F6F4EE;
+  background-image: radial-gradient(rgba(19, 52, 59, 0.10) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
 
 /* ===== Animation layer (light-adapted) ===== */
 @keyframes breathe {

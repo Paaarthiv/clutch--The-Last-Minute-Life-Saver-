@@ -34,6 +34,8 @@ interface AgentContextType extends AppState {
 
 // Turns a raw backend/Gemini error into a short, human-readable line for the activity feed.
 function friendlyAgentError(raw: string): string {
+  if (/billing|credit|prepay|prepayment|depleted|GEMINI_BILLING/i.test(raw)) return "Gemini billing credits are depleted for this API key's AI Studio project.";
+  if (/LOCAL_RATE_LIMIT|too many planning requests/i.test(raw)) return "Too many planning requests - please wait a moment.";
   if (/quota|RESOURCE_EXHAUSTED|\b429\b/i.test(raw)) return "Rate/usage limit reached — try again shortly (or enable billing).";
   if (/503|UNAVAILABLE|overload|high demand|busy/i.test(raw)) return "The model is busy right now — please try again.";
   if (/api[_ ]?key|invalid|permission|\b401\b|\b403\b/i.test(raw)) return "API key/permission issue — check your Gemini key.";
@@ -70,13 +72,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const [hasSeenIntro, setHasSeenIntro] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("clutch_intro_seen") === "true";
-    } catch (e) {
-      return false;
-    }
-  });
+  // Intentionally in-memory (session) only: the landing page should greet the user on every
+  // fresh visit, then they enter the app for that session. Persisting this made the link always
+  // boot straight into the dashboard and skip the landing.
+  const [hasSeenIntro, setHasSeenIntro] = useState<boolean>(false);
 
   const [isThinking, setIsThinking] = useState(false);
   const [replanState, setReplanState] = useState<ReplanState | null>(null);
@@ -117,15 +116,24 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     setIsThinking(true);
     try {
       const currentContext = contextOverride || { tasks, schedule };
+      const d = new Date();
+      const nowStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, context: currentContext, actionTrigger }),
+        body: JSON.stringify({
+          text,
+          context: currentContext,
+          actionTrigger,
+          now: nowStr,
+          workStart: settings.workStart,
+          workEnd: settings.workEnd,
+        }),
       });
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        addActivity(friendlyAgentError(String(data.error ?? res.status)));
+        addActivity(friendlyAgentError(String(data.code ? `${data.code}: ${data.error}` : data.error ?? res.status)));
         return;
       }
 
@@ -188,12 +196,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     setReplanState(null);
   };
 
-  const dismissIntro = () => {
-    setHasSeenIntro(true);
-    try { localStorage.setItem("clutch_intro_seen", "true"); } catch (e) {}
-  };
+  const dismissIntro = () => setHasSeenIntro(true);
 
-  // Return to the landing page (transient — does not clear the persisted flag).
+  // Return to the landing page.
   const goHome = () => setHasSeenIntro(false);
 
   const updateSettings = (patch: Partial<Settings>) => {

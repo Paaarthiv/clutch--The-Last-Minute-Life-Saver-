@@ -1,99 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useAgent } from "../AgentContext";
-import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ScheduledBlock } from "../types";
+import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, X, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { format } from "date-fns";
 import clsx from "clsx";
 
 import { ClutchLogo } from "./ClutchLogo";
-
-function CaptureBar({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
-  const { executeAgentAction, isThinking, settings } = useAgent();
-  const [input, setInput] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-
-  const startRecording = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-       alert("Speech recognition is not supported in this browser.");
-       return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    recognition.onstart = () => {
-      setIsRecording(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      let finalTranscript = "";
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        }
-      }
-      if (finalTranscript) {
-        setInput((prev) => prev + (prev ? " " : "") + finalTranscript);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      setIsRecording(false);
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-    };
-
-    recognition.start();
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isThinking) return;
-    executeAgentAction(input);
-    setInput("");
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="relative mb-0 shrink-0">
-       <div className="glass-bar p-4 flex items-center gap-4 w-full">
-          {settings.voiceEnabled && (
-            <button
-              type="button"
-              onClick={startRecording}
-              className={clsx("transition-colors relative shrink-0", isRecording ? "text-[#20808D]" : "text-[#5B6B6E] hover:text-[#13343B]")}
-            >
-              {isRecording && <span className="absolute inset-[-4px] bg-[#20808D]/20 rounded-full animate-ping" />}
-              <Mic className="w-5 h-5 relative z-10" />
-            </button>
-          )}
-          <input 
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={isRecording ? "Listening..." : "What needs to get done?"}
-            className="bg-transparent border-none outline-none text-sm w-full placeholder:text-[#9AA7A9] text-[#13343B] flex-1"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isThinking}
-            className="px-4 py-2 bg-[#20808D] text-white text-[11px] font-bold uppercase tracking-widest rounded-lg disabled:opacity-50 transition-all active:scale-95 hover:brightness-110 whitespace-nowrap flex items-center gap-1.5"
-          >
-            {isThinking ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Planning</>
-            ) : (
-              <><Sparkles className="w-3.5 h-3.5" /> Plan</>
-            )}
-          </button>
-       </div>
-    </form>
-  );
-}
 
 interface TaskCardProps {
   task: any;
@@ -105,37 +19,38 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
   const isDone = task.status === "done";
   const subtasks = allTasks ? allTasks.filter((t) => t.parentId === task.id) : [];
   
+  const catColor = task.category === "NOW" ? "#20808D" : task.category === "NEXT" ? "#2AA7B5" : "#93C3C7";
+
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-      className={clsx("glass-card p-4 relative overflow-hidden group", isDone && "opacity-50")}
+    <div
+      className={clsx("rounded-2xl border border-[#E6E3DC] bg-white p-4 relative group transition-colors hover:border-[#20808D]/30", isDone && "opacity-50")}
     >
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-start gap-2">
-          <button 
-            onClick={() => markTaskStatus(task.id, isDone ? "idle" : "done")}
-            className="flex-shrink-0 mt-0.5 text-[#13343B]/50 hover:text-[#13343B] transition-colors"
-          >
-            {isDone ? <CheckCircle2 className="w-4 h-4 text-[#34D399]" /> : <div className="w-4 h-4 border border-[#D6D1C7] rounded-sm" />}
-          </button>
-          <div>
-            <span className={clsx("text-sm font-semibold block leading-tight", isDone && "line-through")}>{task.title}</span>
-            {task.deadline && (
-              <span className="text-[10px] uppercase font-bold tracking-widest text-[#20808D] mt-1 block">Due {task.deadline}</span>
-            )}
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          {/* meta row: duration + category + deadline */}
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest tabular-nums" style={{ color: catColor }}>{task.estimated_minutes}m</span>
+            <span className="w-1 h-1 rounded-full bg-[#C2CACB]" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#9AA7A9]">{task.category}</span>
+            {task.deadline && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] truncate">· Due {task.deadline}</span>}
           </div>
+          <div className={clsx("text-sm font-semibold leading-tight", isDone && "line-through")}>{task.title}</div>
+          {task.reason && <div className="text-[11px] text-[#9AA7A9] mt-1 leading-snug">{task.reason}</div>}
         </div>
+        <button
+          onClick={() => markTaskStatus(task.id, isDone ? "idle" : "done")}
+          title={isDone ? "Mark as not done" : "Mark as done"}
+          className="shrink-0 text-[#13343B]/40 hover:text-[#13343B] transition-colors"
+        >
+          {isDone ? <CheckCircle2 className="w-[18px] h-[18px] text-[#34D399]" /> : <Circle className="w-[18px] h-[18px]" />}
+        </button>
       </div>
-      
+
       {subtasks.length > 0 && (
-        <div className="ml-6 space-y-2 mb-3 mt-3 border-l px-3 py-1 border-[#E0DCD3]">
+        <div className="ml-1 space-y-2 mt-3 border-l px-3 py-1 border-[#E0DCD3]">
           {subtasks.map((st) => (
              <div key={st.id} className="flex items-center gap-2 group/sub">
-                <button 
+                <button
                   onClick={() => markTaskStatus(st.id, st.status === "done" ? "idle" : "done")}
                   className="flex-shrink-0 text-[#13343B]/40 hover:text-[#13343B] transition-colors"
                 >
@@ -148,166 +63,382 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
         </div>
       )}
 
-      <div className="flex gap-2 mt-4">
-        <span className="pill bg-black/[0.04] text-[#5B6B6E]">{task.estimated_minutes}m</span>
-        
-        {task.estimated_minutes >= 60 && !isDone && (
-          <button 
-            onClick={() => executeAgentAction(`Break down this large goal into smaller subtasks: "${task.title}". The parentTaskId IS: ${task.id}`)}
-            disabled={isThinking}
-            className="pill bg-[#20808D]/20 text-[#20808D] opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-left focus:opacity-100 uppercase font-bold"
-          >
-            Breakdown
-          </button>
-        )}
-      </div>
-      
-      {task.reason && (
-        <div className="text-[11px] italic text-[#9AA7A9] mt-3">✨ {task.reason}</div>
+      {task.estimated_minutes >= 60 && !isDone && subtasks.length === 0 && (
+        <button
+          onClick={() => executeAgentAction(`Break down this large goal into smaller subtasks: "${task.title}". The parentTaskId IS: ${task.id}`)}
+          disabled={isThinking}
+          className="mt-3 pill bg-[#20808D]/15 text-[#20808D] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer uppercase font-bold"
+        >
+          Break down
+        </button>
       )}
-    </motion.div>
-  );
-}
-
-function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
-  const { tasks, isThinking } = useAgent();
-  const categories = ["NOW", "NEXT", "LATER"] as const;
-
-  return (
-    <div className="w-full xl:w-1/3 flex flex-col gap-6 xl:h-full shrink-0">
-      <CaptureBar inputRef={inputRef} />
-      <div className="xl:flex-1 xl:overflow-hidden flex flex-col gap-4">
-        <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Priorities</div>
-        <div className="space-y-3 xl:overflow-y-auto pr-2 pb-6 xl:pb-20">
-          {isThinking && (
-            <div className="space-y-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="glass-card p-4 space-y-3">
-                  <div className="shimmer h-4 w-2/3" />
-                  <div className="flex gap-2">
-                    <div className="shimmer h-3 w-12" />
-                    <div className="shimmer h-3 w-16" />
-                  </div>
-                  <div className="shimmer h-3 w-1/2" />
-                </div>
-              ))}
-            </div>
-          )}
-          {categories.map(cat => {
-            const catTasks = tasks.filter(t => t.category === cat && t.status !== "dropped" && !t.parentId);
-            if (catTasks.length === 0) return null;
-            
-            return (
-              <AnimatePresence key={cat}>
-                {catTasks.map(t => (
-                  <TaskCard key={t.id} task={t} allTasks={tasks} />
-                ))}
-              </AnimatePresence>
-            );
-          })}
-          {tasks.length === 0 && !isThinking && (
-            <div className="text-center p-8 border border-[#E6E3DC] rounded-2xl bg-black/[0.025]">
-              <LayoutDashboard className="w-8 h-8 text-[#13343B]/20 mx-auto mb-3" />
-              <p className="text-[#5B6B6E] text-sm">No priorities defined yet.</p>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
 
-function TimelineColumn() {
-  const { schedule } = useAgent();
-  
-  const hours = [9, 10, 11, 12, 13, 14, 15, 16, 17]; // 9 AM to 5 PM
-  
-  const parseTimeStr = (t: string) => {
-    if (!t) return 0;
-    const parts = t.split(':');
-    let h = parseInt(parts[0], 10);
-    const m = parseInt(parts[1] || "0", 10);
-    if (isNaN(h)) return 0;
-    if (h < 6) h += 12; // assume PM if very small number
-    if (t.toLowerCase().includes('pm') && h < 12) h += 12;
-    if (t.toLowerCase().includes('am') && h === 12) h -= 12;
-    return h + (isNaN(m) ? 0 : m / 60);
+// Quick-add task pills that live INSIDE the chat sphere. ox/oy are offsets from the sphere
+// centre in units of its radius; rx/ry size each pill's repel field against the dots.
+// Scattered "tap-to-add" task pills. Positions are percentages of the cloud area (centre points),
+// so they spread across whatever space is available without scrolling. A couple are teal-accented.
+type CloudPill = { label: string; top: string; left: string; size: number; accent?: boolean; rot: number; dur: number; delay: number };
+const CLOUD_PILLS: CloudPill[] = [
+  { label: "Exam prep",    top: "14%", left: "32%", size: 17, accent: true,  rot: -4, dur: 5.5, delay: 0.0 },
+  { label: "Gym",          top: "11%", left: "70%", size: 14, rot: 5,  dur: 6.0, delay: 0.6 },
+  { label: "Dentist",      top: "30%", left: "18%", size: 13, rot: 3,  dur: 6.6, delay: 0.3 },
+  { label: "Reply emails", top: "34%", left: "54%", size: 15, rot: -2, dur: 5.0, delay: 1.1 },
+  { label: "Slide deck",   top: "48%", left: "76%", size: 14, rot: -5, dur: 5.8, delay: 0.9 },
+  { label: "Groceries",    top: "52%", left: "30%", size: 13, rot: 2,  dur: 6.2, delay: 1.4 },
+  { label: "Workout",      top: "66%", left: "58%", size: 16, accent: true,  rot: -3, dur: 5.3, delay: 0.2 },
+  { label: "Call mom",     top: "64%", left: "20%", size: 13, rot: 4,  dur: 6.8, delay: 1.7 },
+  { label: "Read 30 min",  top: "82%", left: "42%", size: 14, rot: -2, dur: 5.6, delay: 0.5 },
+  { label: "Pay bills",    top: "84%", left: "72%", size: 13, rot: 3,  dur: 6.1, delay: 1.2 },
+];
+
+function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
+  const { tasks, isThinking, executeAgentAction, settings } = useAgent();
+  const categories = ["NOW", "NEXT", "LATER"] as const;
+  const hasTasks = tasks.some((t) => t.status !== "dropped");
+  const activeCount = tasks.filter((t) => t.status !== "dropped" && !t.parentId).length;
+
+  const [input, setInput] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [prioOpen, setPrioOpen] = useState(false);
+
+  useEffect(() => {
+    document.body.classList.toggle("priority-modal-open", prioOpen);
+    return () => document.body.classList.remove("priority-modal-open");
+  }, [prioOpen]);
+
+  const addSuggestion = (s: string) => {
+    setInput((prev) => (prev.trim() ? `${prev.replace(/\s*,?\s*$/, "")}, ${s}` : s));
+    inputRef.current?.focus();
   };
 
-  const currentHour = new Date().getHours();
-  const currentMinutes = new Date().getMinutes();
-  const currentDecimal = currentHour + (currentMinutes / 60);
+  const startRecording = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert("Speech recognition is not supported in this browser."); return; }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onstart = () => setIsRecording(true);
+    recognition.onresult = (event: any) => {
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+      }
+      if (finalTranscript) setInput((prev) => prev + (prev ? " " : "") + finalTranscript);
+    };
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
+    recognition.start();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isThinking) return;
+    executeAgentAction(input);
+    setInput("");
+  };
+
+  const reprioritize = () => {
+    if (isThinking || !hasTasks) return;
+    executeAgentAction(
+      "",
+      undefined,
+      "Re-evaluate ALL of my existing tasks together and re-prioritize them now by urgency and importance — assign each NOW, NEXT, or LATER with a fresh one-line reason — then rebuild today's time-blocked schedule from the current time. Do NOT create any new tasks."
+    );
+  };
 
   return (
-    <div className="w-full xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[520px] xl:min-h-0">
-      <div className="p-4 border-b border-[#E6E3DC] flex justify-between items-center bg-black/[0.025] shrink-0 z-10">
-        <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
-        <span className="text-[10px] text-[#20808D] font-bold">
-           {schedule.length} Block(s) Scheduled
-        </span>
-      </div>
-      
-      <div className="flex-1 relative overflow-y-auto w-full custom-scrollbar">
-        <div className="h-[800px] w-full relative min-h-max shrink-0">
-          {/* Hour Grid */}
-          {hours.map((h, i) => (
-             <div key={h} className="absolute w-full flex items-center" style={{ top: `${(h - 9) * 80 + 20}px` }}>
-                <div className="w-16 text-right pr-4 text-[10px] text-[#9AA7A9] font-bold uppercase tracking-widest mt-[-1px]">
-                  {h === 12 ? '12 PM' : h > 12 ? `${h-12} PM` : `${h} AM`}
-                </div>
-                <div className="flex-1 border-t border-[#E6E3DC]"></div>
-             </div>
-          ))}
-
-          {/* Now Line */}
-          {currentDecimal >= 9 && currentDecimal <= 17 && (
-            <div 
-              className="absolute left-16 right-4 flex items-center z-20 pointer-events-none"
-              style={{ top: `${(currentDecimal - 9) * 80 + 20}px` }}
+    <>
+    <div className="w-full xl:flex-1 flex flex-col items-center gap-3 xl:h-full min-h-0 xl:py-4 overflow-hidden">
+      {/* Scattered "tap to add" task pills — pretty, messy cloud that fills the space */}
+      <div className="relative w-full flex-1 min-h-[260px]">
+        <div className="absolute left-1/2 top-2 -translate-x-1/2 text-[11px] uppercase tracking-[0.18em] text-[#9AA7A9] font-semibold whitespace-nowrap">
+          Tap a task to add it
+        </div>
+        {CLOUD_PILLS.map((p, i) => (
+          <div key={i} className="absolute" style={{ top: p.top, left: p.left, transform: "translate(-50%, -50%)" }}>
+            <button
+              type="button"
+              onClick={() => addSuggestion(p.label)}
+              title={`Add "${p.label}" to your brain-dump`}
+              className={clsx(
+                "pill-float inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-medium whitespace-nowrap cursor-pointer transition-[box-shadow,border-color] hover:shadow-[0_10px_28px_rgba(19,52,59,0.16)]",
+                p.accent
+                  ? "bg-[#20808D] text-white shadow-[0_8px_20px_rgba(32,128,141,0.30)] hover:bg-[#13565F]"
+                  : "bg-white text-[#13343B] border border-[#E6E3DC] shadow-[0_5px_16px_rgba(19,52,59,0.08)] hover:border-[#20808D]/50"
+              )}
+              style={{ fontSize: p.size, ["--rot" as any]: `${p.rot}deg`, ["--dur" as any]: `${p.dur}s`, ["--delay" as any]: `${p.delay}s` }}
             >
-              <div className="w-2 h-2 rounded-full bg-[#20808D] absolute -left-1 shadow-[0_0_8px_#20808D]" />
-              <div className="h-[1px] w-full bg-[#20808D] opacity-80" />
-            </div>
-          )}
+              <Plus className={clsx("shrink-0", p.accent ? "text-white/80" : "text-[#20808D]")} style={{ width: p.size * 0.8, height: p.size * 0.8 }} />
+              {p.label}
+            </button>
+          </div>
+        ))}
+      </div>
 
-          {/* Blocks */}
-          <div className="absolute top-0 left-16 right-4 bottom-0 pointer-events-none">
-            <AnimatePresence>
-              {schedule.map((block, i) => {
-                const sTime = parseTimeStr(block.startTime);
-                const eTime = parseTimeStr(block.endTime);
-                
-                const top = (sTime - 9) * 80 + 20;
-                const height = Math.max(30, (eTime - sTime) * 80);
-                
-                return (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.1 }}
-                    key={block.taskId + i} 
-                    className="absolute left-0 right-0 p-3 rounded-xl ml-2 overflow-hidden pointer-events-auto"
-                    style={{ top: `${top}px`, height: `${height}px` }}
+      {/* Chat input */}
+      <form onSubmit={handleSubmit} className="capture-glow w-full max-w-[480px] shrink-0">
+        <div className="glass-bar p-3 flex items-center gap-3 w-full">
+          {settings.voiceEnabled && (
+            <button type="button" onClick={startRecording} className={clsx("transition-colors relative shrink-0", isRecording ? "text-[#20808D]" : "text-[#5B6B6E] hover:text-[#13343B]")}>
+              {isRecording && <span className="absolute inset-[-4px] bg-[#20808D]/20 rounded-full animate-ping" />}
+              <Mic className="w-5 h-5 relative z-10" />
+            </button>
+          )}
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={isRecording ? "Listening..." : "What needs to get done?"}
+            className="bg-transparent border-none outline-none text-sm w-full placeholder:text-[#9AA7A9] text-[#13343B] flex-1"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isThinking}
+            className="px-4 py-2 bg-[#20808D] text-white text-[11px] font-bold uppercase tracking-widest rounded-lg disabled:opacity-50 transition-all active:scale-95 hover:brightness-110 whitespace-nowrap flex items-center gap-1.5"
+          >
+            {isThinking ? (<><Loader2 className="w-3.5 h-3.5 animate-spin" /> Planning</>) : (<><Sparkles className="w-3.5 h-3.5" /> Plan</>)}
+          </button>
+        </div>
+      </form>
+
+      {/* Priorities toggle button + description */}
+      <div className="w-full max-w-[480px] shrink-0">
+        <button
+          onClick={() => setPrioOpen((o) => !o)}
+          className="w-full glass-bar px-4 py-3 flex items-center justify-between hover:border-[#20808D]/40 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <LayoutDashboard className="w-4 h-4 text-[#20808D]" />
+            <span className="text-sm font-semibold text-[#13343B]">Priorities</span>
+            {activeCount > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{activeCount}</span>}
+          </div>
+          <ChevronDown className="w-4 h-4 text-[#9AA7A9]" />
+        </button>
+        <p className="text-[11px] text-[#9AA7A9] leading-relaxed mt-2 px-1">
+          Open your ranked tasks — Clutch sorts them <span className="font-semibold text-[#5B6B6E]">NOW · NEXT · LATER</span> and lets you <span className="font-semibold text-[#20808D]">break down</span> big ones into steps.
+        </p>
+      </div>
+
+    </div>
+
+    {/* Priorities — wide centered panel, closes on click-away */}
+    <AnimatePresence>
+      {prioOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setPrioOpen(false)}
+            className="absolute inset-0 bg-[#13343B]/45"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 10 }}
+            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            className="priority-modal-panel relative glass-card w-full max-w-xl h-[82vh] flex flex-col overflow-hidden"
+          >
+            <div className="p-5 border-b border-[#E6E3DC] flex items-start justify-between gap-4 shrink-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2.5">
+                  <LayoutDashboard className="w-5 h-5 text-[#20808D]" />
+                  <h2 className="font-display text-lg text-[#13343B]">Priorities</h2>
+                  {activeCount > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{activeCount}</span>}
+                </div>
+                <p className="text-[12px] text-[#5B6B6E] leading-relaxed mt-2">
+                  Clutch ranks every task <span className="font-semibold text-[#13343B]">NOW · NEXT · LATER</span>. Hover a 60m+ task to <span className="font-semibold text-[#20808D]">break it down</span> into steps, or tick it off as you go.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {hasTasks && (
+                  <button
+                    onClick={reprioritize}
+                    disabled={isThinking}
+                    title="Re-evaluate and re-rank all tasks together"
+                    className="flex items-center gap-1.5 text-[11px] font-semibold text-[#20808D] hover:text-[#13565F] disabled:opacity-50 transition-colors px-2 py-1.5 rounded-lg hover:bg-[#20808D]/5"
                   >
-                    <div className={clsx(
-                      "absolute inset-0 rounded-xl border backdrop-blur-sm",
-                      i === 0 ? "bg-[#20808D]/10 border-[#20808D]/30" : "bg-black/[0.03] border-[#E0DCD3]"
-                    )} />
-                    <div className="relative z-10">
-                      <div className="text-sm font-semibold text-[#13343B]/90 truncate">{block.title}</div>
-                      {height > 50 && (
-                        <div className="text-[10px] flex items-center gap-1 uppercase tracking-widest text-[#20808D] mt-2 font-bold">
-                           <Calendar className="w-3 h-3" />
-                           Focus Block
-                        </div>
-                      )}
+                    <RotateCcw className={clsx("w-3.5 h-3.5", isThinking && "animate-spin")} />
+                    <span className="hidden sm:inline">Re-prioritize</span>
+                  </button>
+                )}
+                <button onClick={() => setPrioOpen(false)} title="Close" className="w-8 h-8 rounded-lg flex items-center justify-center text-[#9AA7A9] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="priority-scroll flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
+              {isThinking && (
+                <div className="space-y-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="rounded-2xl border border-[#E6E3DC] bg-white p-4 space-y-3">
+                      <div className="shimmer h-3 w-20" />
+                      <div className="shimmer h-4 w-2/3" />
+                      <div className="shimmer h-3 w-1/2" />
                     </div>
-                  </motion.div>
+                  ))}
+                </div>
+              )}
+              {categories.map((cat) => {
+                const catTasks = tasks.filter((t) => t.category === cat && t.status !== "dropped" && !t.parentId);
+                if (catTasks.length === 0) return null;
+                return (
+                  <div key={cat} className="space-y-3">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9AA7A9]">{cat}</div>
+                    {catTasks.map((t) => (<TaskCard key={t.id} task={t} allTasks={tasks} />))}
+                  </div>
                 );
               })}
-            </AnimatePresence>
-          </div>
+              {tasks.length === 0 && !isThinking && (
+                <div className="text-center py-16 flex flex-col items-center justify-center">
+                  <LayoutDashboard className="w-10 h-10 text-[#13343B]/20 mb-3" />
+                  <p className="text-[#5B6B6E] text-sm">No priorities yet.</p>
+                  <p className="text-[#9AA7A9] text-xs mt-1">Brain-dump a few tasks and they'll be ranked here.</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
         </div>
+      )}
+    </AnimatePresence>
+    </>
+  );
+}
+
+const TL_START = 9;   // default day start used as a parse fallback
+
+// Schedule times come back as 24h "HH:mm". Parse defensively (also tolerate am/pm strings).
+function parseTimeStr(t: string): number {
+  if (!t) return TL_START;
+  const lower = t.toLowerCase();
+  const parts = lower.replace(/[ap]m/, "").trim().split(":");
+  let h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1] || "0", 10);
+  if (isNaN(h)) return TL_START;
+  if (lower.includes("pm") && h < 12) h += 12;
+  if (lower.includes("am") && h === 12) h = 0;
+  return h + (isNaN(m) ? 0 : m / 60);
+}
+
+// Pack blocks into side-by-side columns so overlapping ones never stack on top of each other.
+// Returns each block with { col, cols } describing its lane and how wide its overlap cluster is.
+function layoutBlocks(schedule: ScheduledBlock[]) {
+  const blocks = schedule
+    .map((b, idx) => ({ b, idx, start: parseTimeStr(b.startTime), end: Math.max(parseTimeStr(b.startTime) + 0.05, parseTimeStr(b.endTime)) }))
+    .sort((a, z) => a.start - z.start || a.end - z.end);
+
+  const out: { b: ScheduledBlock; idx: number; start: number; end: number; col: number; cols: number }[] = [];
+  let cluster: typeof out = [];
+  let clusterEnd = -Infinity;
+
+  const flush = () => {
+    if (!cluster.length) return;
+    const cols = Math.max(...cluster.map((c) => c.col)) + 1;
+    cluster.forEach((c) => (c.cols = cols));
+    out.push(...cluster);
+    cluster = [];
+  };
+
+  for (const item of blocks) {
+    if (item.start >= clusterEnd) flush();
+    // first free lane in the current cluster
+    const used = new Set(cluster.filter((c) => c.end > item.start).map((c) => c.col));
+    let col = 0;
+    while (used.has(col)) col++;
+    cluster.push({ ...item, col, cols: 1 });
+    clusterEnd = Math.max(clusterEnd, item.end);
+  }
+  flush();
+  return out;
+}
+
+// 13.5 -> "1:30 PM"
+function fmt12(dec: number): string {
+  let h = Math.floor(dec);
+  const m = Math.round((dec - h) * 60);
+  const ap = h < 12 || h === 24 ? "AM" : "PM";
+  let hh = h % 12; if (hh === 0) hh = 12;
+  return `${hh}:${String(m).padStart(2, "0")} ${ap}`;
+}
+function fmtDur(mins: number): string {
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+  return `${Math.max(1, Math.round(mins))}m`;
+}
+
+// A clean agenda timeline. A list never overlaps, so dense back-to-back micro-blocks stay
+// perfectly legible — unlike a proportional grid that has to squeeze 5-minute blocks.
+function TimelineColumn() {
+  const { schedule } = useAgent();
+
+  const blocks = schedule
+    .map((b, idx) => ({ b, idx, start: parseTimeStr(b.startTime), end: Math.max(parseTimeStr(b.startTime) + 0.05, parseTimeStr(b.endTime)) }))
+    .sort((a, z) => a.start - z.start || a.end - z.end);
+
+  const now = new Date();
+  const nowDec = now.getHours() + now.getMinutes() / 60;
+
+  return (
+    <div className="w-full xl:w-[500px] xl:shrink-0 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[520px] xl:min-h-0">
+      <div className="p-4 border-b border-[#E6E3DC] flex justify-between items-center bg-black/[0.025] shrink-0 z-10">
+        <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
+        <span className="text-[10px] text-[#20808D] font-bold">{schedule.length} Block(s) Scheduled</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto w-full custom-scrollbar p-4">
+        {blocks.length === 0 ? (
+          <div className="h-full min-h-[360px] flex flex-col items-center justify-center text-center">
+            <Calendar className="w-8 h-8 text-[#13343B]/20 mb-3" />
+            <p className="text-[#5B6B6E] text-sm">No blocks scheduled yet.</p>
+            <p className="text-[#9AA7A9] text-xs mt-1">Plan some tasks and your timed day appears here.</p>
+          </div>
+        ) : (
+          <AnimatePresence>
+            {blocks.map(({ b: block, idx, start, end }, i) => {
+              const isCurrent = nowDec >= start && nowDec < end;
+              const isPast = nowDec >= end;
+              const dur = (end - start) * 60;
+              return (
+                <motion.div
+                  key={block.taskId + idx}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ delay: Math.min(i * 0.04, 0.3) }}
+                  className="flex gap-3"
+                >
+                  {/* Time gutter */}
+                  <div className="w-16 shrink-0 text-right pt-2.5">
+                    <div className={clsx("text-[11px] font-bold tabular-nums leading-none", isPast ? "text-[#9AA7A9]" : "text-[#13343B]")}>{fmt12(start)}</div>
+                    <div className="text-[10px] text-[#9AA7A9] tabular-nums mt-1 leading-none">{fmt12(end)}</div>
+                  </div>
+                  {/* Connector */}
+                  <div className="flex flex-col items-center shrink-0 pt-3">
+                    <div className={clsx("w-2.5 h-2.5 rounded-full ring-2 ring-white shrink-0", isCurrent ? "bg-[#20808D] shadow-[0_0_8px_#20808D]" : isPast ? "bg-[#C2CACB]" : "bg-[#20808D]/50")} />
+                    {i < blocks.length - 1 && <div className="w-px flex-1 bg-[#E6E3DC] my-1" />}
+                  </div>
+                  {/* Card */}
+                  <div className={clsx(
+                    "flex-1 min-w-0 mb-2 rounded-xl border p-3 transition-colors",
+                    isCurrent ? "bg-[#20808D]/10 border-[#20808D]/35" : "bg-black/[0.02] border-[#E6E3DC]",
+                    isPast && "opacity-60"
+                  )}>
+                    <div className={clsx("text-sm font-semibold leading-tight", isPast && "line-through")}>{block.title}</div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="pill bg-black/[0.04] text-[#5B6B6E] normal-case tracking-normal">{fmtDur(dur)}</span>
+                      {isCurrent && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#20808D] animate-pulse" />Now</span>}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );
@@ -367,25 +498,52 @@ function AgentActivityFeed() {
     e.preventDefault();
   };
 
-  return (
-    <div className="w-full xl:flex-shrink-0 flex xl:gap-2" style={isWide ? { width } : undefined}>
-      {/* Drag handle — grab to resize, double-click to reset */}
-      {isWide && (
-        <div
-          onMouseDown={startDrag}
-          onDoubleClick={() => setWidth(300)}
-          title="Drag to resize • double-click to reset"
-          className="group relative w-2 shrink-0 cursor-col-resize flex items-center justify-center"
-        >
-          <div className="w-px h-full bg-black/[0.06] group-hover:bg-[#20808D]/50 transition-colors" />
-          <div className="absolute h-10 w-1 rounded-full bg-black/[0.08] group-hover:bg-[#20808D] transition-colors" />
-        </div>
-      )}
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("clutch_activity_collapsed") === "true"; } catch (e) { return false; }
+  });
+  const toggleCollapsed = () => setCollapsed((c) => {
+    const v = !c;
+    try { localStorage.setItem("clutch_activity_collapsed", String(v)); } catch (e) {}
+    return v;
+  });
 
+  // Collapsed + wide: render a slim rail with an expand button.
+  if (isWide && collapsed) {
+    return (
+      <div className="xl:flex-shrink-0 flex flex-col items-center gap-3 w-10 border-l border-[#EDEAE2] pl-2">
+        <button
+          onClick={toggleCollapsed}
+          title="Expand activity"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5B6B6E] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors"
+        >
+          <ChevronsLeft className="w-4 h-4" />
+        </button>
+        <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] uppercase tracking-widest text-[#9AA7A9] font-bold">Agent Activity</div>
+        <div className={clsx("w-1.5 h-1.5 rounded-full mt-1", isThinking ? "bg-[#20808D] animate-pulse" : "bg-[#C2CACB]")} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full xl:flex-shrink-0 flex xl:pl-4 xl:border-l xl:border-[#EDEAE2]" style={isWide && !collapsed ? { width } : undefined}>
       {/* Content column */}
       <div className="flex-1 min-w-0 flex flex-col gap-4 xl:h-full">
-        <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold shrink-0">Agent Activity</div>
+        <div className="flex items-center justify-between shrink-0">
+          <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Agent Activity</div>
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? "Show activity" : "Collapse activity"}
+            className="w-7 h-7 -mr-1 rounded-lg flex items-center justify-center text-[#9AA7A9] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors"
+          >
+            {collapsed ? <ChevronsLeft className="w-4 h-4" /> : <ChevronsRight className="w-4 h-4" />}
+          </button>
+        </div>
 
+        {collapsed && (
+          <div className="text-[11px] text-[#9AA7A9] shrink-0">Activity hidden — tap the arrow to show.</div>
+        )}
+
+        {!collapsed && (<>
         <div className="xl:flex-1 text-[10px] space-y-4 overflow-y-auto overflow-x-hidden pr-2 pb-6 xl:pb-20 max-h-80 xl:max-h-none custom-scrollbar">
           <AnimatePresence>
             {isThinking && (
@@ -425,6 +583,7 @@ function AgentActivityFeed() {
           <div className="text-[#20808D] text-[11px] font-bold uppercase mb-1">Status</div>
           <div className="text-[11px] leading-snug text-[#5B6B6E]">{isThinking ? "Processing recent user input..." : "System stabilized. Awaiting input."}</div>
         </div>
+        </>)}
       </div>
     </div>
   );
@@ -527,16 +686,7 @@ function LeftSidebar({ activeView, setActiveView, onNewTask }: { activeView: Vie
         </button>
       </div>
 
-      {/* New Task */}
-      <div className={clsx("pb-5", collapsed ? "px-2" : "px-4")}>
-        <button
-          onClick={onNewTask}
-          title="New Task"
-          className="w-full bg-[#20808D] hover:bg-[#13565F] text-white rounded-xl py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-[0_6px_16px_rgba(32,128,141,0.25)]">
-          <Plus className="w-4 h-4 shrink-0" />
-          {!collapsed && "New Task"}
-        </button>
-      </div>
+      <div className="pb-2" />
 
       {/* Nav */}
       <div className="px-4 pb-1 h-[22px] text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9AA7A9] overflow-hidden whitespace-nowrap">{!collapsed && "Workspace"}</div>
@@ -637,122 +787,279 @@ function ArchiveView() {
   );
 }
 
-interface BubbleState { x: number; y: number; vx: number; vy: number; r: number; }
+interface GNode { id: string; title: string; cat: string; isSub: boolean; parentId?: string; r: number; }
+interface GLink { a: string; b: string; }
+interface Pos { x: number; y: number; vx: number; vy: number; }
 
+const bubbleColor = (cat: string) => {
+  if (cat === "NOW") return { c: "#20808D", tint: "#5FB8C2" };
+  if (cat === "NEXT") return { c: "#2AA7B5", tint: "#8BD3DB" };
+  return { c: "#93C3C7", tint: "#C6E4E6" };
+};
+const bubbleRadius = (min: number, isSub: boolean) => {
+  const m = Math.max(10, Math.min(240, min || 30));
+  const base = 30 + Math.sqrt(m) * 3.6;
+  const r = isSub ? base * 0.7 : base;
+  // Enforce a floor so even short-time tasks are big enough to hold their label.
+  return Math.round(Math.max(isSub ? 36 : 46, r));
+};
+
+/**
+ * An Obsidian/n8n-style task graph.
+ * - Nodes are tasks; subtasks link back to their root task with a line.
+ * - Real circle collision keeps bubbles touching, never overlapping.
+ * - Drag a node to reposition it, scroll to zoom, drag empty canvas to pan.
+ * - No cursor-repel; nodes drift gently when left alone.
+ */
 function FloatingBubbles({ tasks }: { tasks: any[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const elsRef = useRef<(HTMLDivElement | null)[]>([]);
-  const stateRef = useRef<BubbleState[]>([]);
-  const mouseRef = useRef({ x: -9999, y: -9999, active: false });
+  const elsRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const lineRef = useRef<Record<string, SVGLineElement | null>>({});
+  const posRef = useRef<Record<string, Pos>>({});
   const rafRef = useRef<number>(0);
+  const dragIdRef = useRef<string | null>(null);
+  const panRef = useRef({ active: false, sx: 0, sy: 0, ox: 0, oy: 0 });
 
-  const items = tasks.slice(0, 14);
-  const idsKey = items.map((t) => t.id + ":" + (t.estimated_minutes || 0)).join(",");
+  const [view, setView] = useState({ x: 0, y: 0, k: 1 });
+  const viewRef = useRef(view); viewRef.current = view;
 
-  const colorFor = (cat: string) => {
-    if (cat === "NOW") return { c: "#20808D", tint: "#5FB8C2" };
-    if (cat === "NEXT") return { c: "#2AA7B5", tint: "#8BD3DB" };
-    return { c: "#93C3C7", tint: "#C6E4E6" };
-  };
-  const radiusFor = (min: number) => {
-    const m = Math.max(15, Math.min(240, min || 30));
-    return Math.round(34 + Math.sqrt(m) * 4.2);
-  };
+  const items = tasks.slice(0, 24);
+  const idsKey = items.map((t) => t.id + ":" + (t.estimated_minutes || 0) + ":" + t.category).join(",");
+
+  // Stable graph structure derived from the current tasks.
+  const graph = React.useMemo(() => {
+    const ids = new Set(items.map((t) => t.id));
+    const nodes: GNode[] = items.map((t) => {
+      const isSub = !!t.parentId && ids.has(t.parentId);
+      return { id: t.id, title: t.title, cat: t.category || "LATER", isSub, parentId: isSub ? t.parentId : undefined, r: bubbleRadius(t.estimated_minutes, isSub) };
+    });
+    const links: GLink[] = nodes.filter((n) => n.isSub && n.parentId).map((n) => ({ a: n.parentId!, b: n.id }));
+    return { nodes, links };
+  }, [idsKey]);
 
   useEffect(() => {
     const cont = containerRef.current;
-    if (!cont || items.length === 0) return;
+    if (!cont || graph.nodes.length === 0) return;
     const W = cont.clientWidth || 480;
-    const H = cont.clientHeight || 440;
-    stateRef.current = items.map((t) => {
-      const r = radiusFor(t.estimated_minutes);
-      return {
-        x: r + Math.random() * Math.max(1, W - 2 * r),
-        y: r + Math.random() * Math.max(1, H - 2 * r),
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        r,
-      };
+    const H = cont.clientHeight || 460;
+    const center = { x: W / 2, y: H / 2 };
+
+    // Initialise positions for new nodes (keep positions of nodes that persisted).
+    const prev = posRef.current;
+    const next: Record<string, Pos> = {};
+    graph.nodes.forEach((n, i) => {
+      if (prev[n.id]) { next[n.id] = prev[n.id]; return; }
+      const ang = (i / Math.max(1, graph.nodes.length)) * Math.PI * 2;
+      const rad = Math.min(W, H) * 0.26;
+      next[n.id] = { x: center.x + Math.cos(ang) * rad + (Math.random() - 0.5) * 24, y: center.y + Math.sin(ang) * rad + (Math.random() - 0.5) * 24, vx: 0, vy: 0 };
     });
+    posRef.current = next;
+
+    const nodes = graph.nodes;
+    const links = graph.links;
 
     const step = () => {
-      const w = cont.clientWidth, h = cont.clientHeight;
-      const cx = w / 2, cy = h / 2;
-      const st = stateRef.current;
-      const m = mouseRef.current;
-      for (let i = 0; i < st.length; i++) {
-        const b = st[i];
-        b.vx += (Math.random() - 0.5) * 0.07;
-        b.vy += (Math.random() - 0.5) * 0.07;
-        b.vx += (cx - b.x) * 0.0002;
-        b.vy += (cy - b.y) * 0.0002;
-        if (m.active) {
-          const dx = b.x - m.x, dy = b.y - m.y;
-          const dist = Math.hypot(dx, dy);
-          const influence = b.r + 90;
-          if (dist < influence && dist > 0.01) {
-            const force = (1 - dist / influence) * 1.8;
-            b.vx += (dx / dist) * force;
-            b.vy += (dy / dist) * force;
+      const pos = posRef.current;
+      const dragId = dragIdRef.current;
+
+      // gentle centering + float
+      for (const n of nodes) {
+        const p = pos[n.id]; if (!p || n.id === dragId) continue;
+        p.vx += (center.x - p.x) * 0.0009;
+        p.vy += (center.y - p.y) * 0.0009;
+        p.vx += (Math.random() - 0.5) * 0.04;
+        p.vy += (Math.random() - 0.5) * 0.04;
+      }
+      // pairwise repulsion (spacing)
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = pos[nodes[i].id], b = pos[nodes[j].id]; if (!a || !b) continue;
+          let dx = b.x - a.x, dy = b.y - a.y; const d = Math.hypot(dx, dy) || 0.01;
+          const rep = 5200 / (d * d);
+          const fx = (dx / d) * rep, fy = (dy / d) * rep;
+          if (nodes[i].id !== dragId) { a.vx -= fx; a.vy -= fy; }
+          if (nodes[j].id !== dragId) { b.vx += fx; b.vy += fy; }
+        }
+      }
+      // link springs (pull subtask toward its root)
+      for (const l of links) {
+        const a = pos[l.a], b = pos[l.b]; if (!a || !b) continue;
+        const na = nodes.find((n) => n.id === l.a), nb = nodes.find((n) => n.id === l.b); if (!na || !nb) continue;
+        let dx = b.x - a.x, dy = b.y - a.y; const d = Math.hypot(dx, dy) || 0.01;
+        const rest = na.r + nb.r + 30;
+        const f = (d - rest) * 0.012;
+        const fx = (dx / d) * f, fy = (dy / d) * f;
+        if (l.a !== dragId) { a.vx += fx; a.vy += fy; }
+        if (l.b !== dragId) { b.vx -= fx; b.vy -= fy; }
+      }
+      // integrate
+      for (const n of nodes) {
+        const p = pos[n.id]; if (!p) continue;
+        if (n.id === dragId) { p.vx = 0; p.vy = 0; continue; }
+        p.vx *= 0.86; p.vy *= 0.86;
+        const sp = Math.hypot(p.vx, p.vy);
+        if (sp > 3.2) { p.vx = (p.vx / sp) * 3.2; p.vy = (p.vy / sp) * 3.2; }
+        p.x += p.vx; p.y += p.vy;
+      }
+      // collision resolution — separate overlaps so circles touch, not overlap
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const a = pos[nodes[i].id], b = pos[nodes[j].id]; if (!a || !b) continue;
+            let dx = b.x - a.x, dy = b.y - a.y; const d = Math.hypot(dx, dy) || 0.01;
+            const min = nodes[i].r + nodes[j].r + 3;
+            if (d < min) {
+              const ux = dx / d, uy = dy / d, overlap = min - d;
+              const aFixed = nodes[i].id === dragId, bFixed = nodes[j].id === dragId;
+              const aShift = aFixed ? 0 : (bFixed ? overlap : overlap / 2);
+              const bShift = bFixed ? 0 : (aFixed ? overlap : overlap / 2);
+              a.x -= ux * aShift; a.y -= uy * aShift;
+              b.x += ux * bShift; b.y += uy * bShift;
+            }
           }
         }
-        b.vx *= 0.93; b.vy *= 0.93;
-        const sp = Math.hypot(b.vx, b.vy), max = 2.6;
-        if (sp > max) { b.vx = (b.vx / sp) * max; b.vy = (b.vy / sp) * max; }
-        b.x += b.vx; b.y += b.vy;
-        if (b.x < b.r) { b.x = b.r; b.vx = Math.abs(b.vx) * 0.6; }
-        if (b.x > w - b.r) { b.x = w - b.r; b.vx = -Math.abs(b.vx) * 0.6; }
-        if (b.y < b.r) { b.y = b.r; b.vy = Math.abs(b.vy) * 0.6; }
-        if (b.y > h - b.r) { b.y = h - b.r; b.vy = -Math.abs(b.vy) * 0.6; }
-        const el = elsRef.current[i];
-        if (el) el.style.transform = `translate(${b.x - b.r}px, ${b.y - b.r}px)`;
+      }
+      // write to DOM
+      for (const n of nodes) {
+        const p = pos[n.id], el = elsRef.current[n.id];
+        if (p && el) el.style.transform = `translate(${p.x - n.r}px, ${p.y - n.r}px)`;
+      }
+      for (const l of links) {
+        const a = pos[l.a], b = pos[l.b], ln = lineRef.current[l.a + ">" + l.b];
+        if (a && b && ln) { ln.setAttribute("x1", String(a.x)); ln.setAttribute("y1", String(a.y)); ln.setAttribute("x2", String(b.x)); ln.setAttribute("y2", String(b.y)); }
       }
       rafRef.current = requestAnimationFrame(step);
     };
     rafRef.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [idsKey]);
+  }, [graph]);
 
-  const onMove = (e: React.MouseEvent) => {
-    const cont = containerRef.current;
-    if (!cont) return;
-    const rect = cont.getBoundingClientRect();
-    mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top, active: true };
+  // Non-passive wheel listener so we can zoom toward the cursor without scrolling the page.
+  useEffect(() => {
+    const cont = containerRef.current; if (!cont) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = cont.getBoundingClientRect();
+      const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+      setView((v) => {
+        const k = Math.min(2.4, Math.max(0.4, v.k * (e.deltaY < 0 ? 1.1 : 0.9)));
+        const wx = (sx - v.x) / v.k, wy = (sy - v.y) / v.k;
+        return { k, x: sx - wx * k, y: sy - wy * k };
+      });
+    };
+    cont.addEventListener("wheel", onWheel, { passive: false });
+    return () => cont.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const toWorld = (clientX: number, clientY: number) => {
+    const rect = containerRef.current!.getBoundingClientRect();
+    const v = viewRef.current;
+    return { x: (clientX - rect.left - v.x) / v.k, y: (clientY - rect.top - v.y) / v.k };
   };
-  const onLeave = () => { mouseRef.current.active = false; };
 
-  if (items.length === 0) {
+  const onNodeDown = (e: React.PointerEvent, id: string) => {
+    e.stopPropagation();
+    dragIdRef.current = id;
+  };
+  const onCanvasDown = (e: React.PointerEvent) => {
+    panRef.current = { active: true, sx: e.clientX, sy: e.clientY, ox: viewRef.current.x, oy: viewRef.current.y };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (dragIdRef.current) {
+      const w = toWorld(e.clientX, e.clientY);
+      const p = posRef.current[dragIdRef.current];
+      if (p) { p.x = w.x; p.y = w.y; p.vx = 0; p.vy = 0; }
+    } else if (panRef.current.active) {
+      const pr = panRef.current;
+      setView((v) => ({ ...v, x: pr.ox + (e.clientX - pr.sx), y: pr.oy + (e.clientY - pr.sy) }));
+    }
+  };
+  const endInteraction = () => { dragIdRef.current = null; panRef.current.active = false; };
+
+  const zoomBy = (factor: number) => {
+    const cont = containerRef.current; if (!cont) return;
+    const sx = cont.clientWidth / 2, sy = cont.clientHeight / 2;
+    setView((v) => {
+      const k = Math.min(2.4, Math.max(0.4, v.k * factor));
+      const wx = (sx - v.x) / v.k, wy = (sy - v.y) / v.k;
+      return { k, x: sx - wx * k, y: sy - wy * k };
+    });
+  };
+  const resetView = () => setView({ x: 0, y: 0, k: 1 });
+
+  if (graph.nodes.length === 0) {
     return (
-      <div className="h-[440px] flex items-center justify-center text-[#9AA7A9] text-sm border border-dashed border-[#E0DCD3] rounded-3xl">
-        Plan some tasks and they'll float here.
+      <div className="h-[460px] flex items-center justify-center text-[#9AA7A9] text-sm border border-dashed border-[#E0DCD3] rounded-3xl node-canvas">
+        Plan some tasks and they'll appear here as a graph.
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} onMouseMove={onMove} onMouseLeave={onLeave} className="relative h-[440px] w-full overflow-hidden select-none">
-      {items.map((t, i) => {
-        const { c, tint } = colorFor(t.category);
-        const r = radiusFor(t.estimated_minutes);
-        return (
-          <div
-            key={t.id}
-            ref={(el) => { elsRef.current[i] = el; }}
-            className="absolute top-0 left-0 rounded-full flex items-center justify-center text-center"
-            style={{
-              width: r * 2,
-              height: r * 2,
-              background: `radial-gradient(circle at 35% 30%, ${tint} 0%, ${c} 55%, transparent 74%)`,
-              mixBlendMode: "multiply",
-              willChange: "transform",
-            }}
-          >
-            <span className="px-2 font-semibold leading-tight text-[#0E3B40]" style={{ fontSize: Math.max(10, Math.min(14, r / 5)) }}>
-              {t.title}
-            </span>
-          </div>
-        );
-      })}
+    <div
+      ref={containerRef}
+      onPointerDown={onCanvasDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endInteraction}
+      onPointerLeave={endInteraction}
+      className="relative h-[460px] w-full rounded-3xl overflow-hidden border border-[#E0DCD3] node-canvas select-none"
+      style={{ touchAction: "none", cursor: panRef.current.active ? "grabbing" : "grab" }}
+    >
+      <div className="absolute top-0 left-0 will-change-transform" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, transformOrigin: "0 0" }}>
+        <svg className="absolute top-0 left-0 overflow-visible pointer-events-none" width="1" height="1">
+          {graph.links.map((l) => (
+            <line key={l.a + ">" + l.b} ref={(el) => { lineRef.current[l.a + ">" + l.b] = el; }} stroke="rgba(32,128,141,0.35)" strokeWidth={1.5} strokeLinecap="round" />
+          ))}
+        </svg>
+        {graph.nodes.map((n) => {
+          const { c, tint } = bubbleColor(n.cat);
+          return (
+            <div
+              key={n.id}
+              ref={(el) => { elsRef.current[n.id] = el; }}
+              onPointerDown={(e) => onNodeDown(e, n.id)}
+              className="absolute top-0 left-0 rounded-full flex items-center justify-center text-center cursor-grab active:cursor-grabbing"
+              style={{
+                width: n.r * 2,
+                height: n.r * 2,
+                background: `radial-gradient(circle at 35% 30%, ${tint} 0%, ${c} 58%, transparent 76%)`,
+                willChange: "transform",
+              }}
+            >
+              <span
+                className="font-semibold text-[#0E3B40] pointer-events-none text-center"
+                style={{
+                  maxWidth: n.r * 1.7,
+                  fontSize: Math.max(8, Math.min(12, n.r / 5)),
+                  lineHeight: 1.1,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  wordBreak: "break-word",
+                  padding: "0 4px",
+                }}
+              >
+                {n.title}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Zoom controls */}
+      <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
+        {[{ icon: Plus, fn: () => zoomBy(1.2), t: "Zoom in" }, { icon: Minus, fn: () => zoomBy(0.8), t: "Zoom out" }, { icon: Maximize2, fn: resetView, t: "Reset view" }].map(({ icon: Icon, fn, t }) => (
+          <button key={t} onClick={fn} title={t} className="w-8 h-8 rounded-lg bg-white/90 border border-[#E0DCD3] flex items-center justify-center text-[#5B6B6E] hover:text-[#13343B] hover:border-[#20808D]/40 transition-colors shadow-sm">
+            <Icon className="w-4 h-4" />
+          </button>
+        ))}
+      </div>
+
+      {/* Hint */}
+      <div className="absolute top-3 left-3 text-[10px] text-[#5B6B6E]/80 bg-white/70 rounded-full px-2.5 py-1 pointer-events-none">
+        Drag nodes • scroll to zoom • drag canvas to pan
+      </div>
     </div>
   );
 }
@@ -802,9 +1109,10 @@ function InsightsView() {
 
         {/* Center — floating bubbles */}
         <div className="col-span-12 lg:col-span-6 order-last lg:order-none">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-[#9AA7A9] font-semibold mb-3 text-center">Visual graph</div>
           <FloatingBubbles tasks={active} />
           <p className="text-[12px] text-[#9AA7A9] leading-relaxed mt-3 text-center max-w-md mx-auto">
-            Each bubble is a task — size reflects estimated time, color its priority. Hover to nudge them around.
+            Each node is a task — size reflects estimated time, color its priority. Subtasks link to their root task; drag, pan, and zoom to explore.
           </p>
         </div>
 
@@ -872,51 +1180,164 @@ function CalendarView() {
   const startH = Math.min(settings.workStart, settings.workEnd);
   const endH = Math.max(settings.workStart, settings.workEnd);
   const hours = Array.from({ length: Math.max(1, endH - startH) }, (_, i) => startH + i);
-  const parse = (t: string) => {
-    const [h, m] = (t || "").split(':').map(Number);
-    return (isNaN(h) ? 0 : h) + (isNaN(m) ? 0 : m / 60);
-  };
   const hourLabel = (h: number) => (h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`);
+
+  const HOURPX = 84;
+  const bodyH = hours.length * HOURPX;
+  const gridTpl = `56px repeat(7, minmax(0, 1fr))`;
+  const laid = layoutBlocks(schedule); // packs true overlaps into columns
 
   return (
     <main className="flex-1 overflow-auto custom-scrollbar px-4 md:px-8 py-6">
-      <div className="min-w-[720px]">
-        <div className="grid sticky top-0 z-10 bg-canvas-base pb-2" style={{ gridTemplateColumns: `60px repeat(7, 1fr)` }}>
-          <div />
+      <div className="min-w-[760px] glass-card overflow-hidden">
+        {/* Day header — sits flush above the grid (no gap) */}
+        <div className="grid border-b border-[#ECE9E1]" style={{ gridTemplateColumns: gridTpl }}>
+          <div className="bg-black/[0.015]" />
           {days.map((d, i) => {
             const isToday = d.toDateString() === today.toDateString();
             return (
-              <div key={i} className={clsx("text-center text-[11px] uppercase tracking-widest font-bold", isToday ? "text-[#20808D]" : "text-[#5B6B6E]")}>
-                {format(d, "EEE")}
-                <div className={clsx("text-lg font-display", isToday ? "text-[#13343B]" : "text-[#9AA7A9]")}>{format(d, "d")}</div>
+              <div key={i} className={clsx("text-center py-2.5 border-l border-[#ECE9E1]", isToday && "bg-[#20808D]/[0.06]")}>
+                <div className={clsx("text-[10px] uppercase tracking-widest font-bold", isToday ? "text-[#20808D]" : "text-[#9AA7A9]")}>{format(d, "EEE")}</div>
+                <div className={clsx("text-lg font-display leading-none mt-1", isToday ? "text-[#13343B]" : "text-[#5B6B6E]")}>{format(d, "d")}</div>
               </div>
             );
           })}
         </div>
-        <div className="grid" style={{ gridTemplateColumns: `60px repeat(7, 1fr)` }}>
-          {hours.map((h) => (
-            <React.Fragment key={h}>
-              <div className="text-right pr-3 text-[10px] text-[#9AA7A9] font-bold uppercase h-20 -mt-2">{hourLabel(h)}</div>
-              {days.map((d, di) => {
-                const isToday = d.toDateString() === today.toDateString();
-                const blocks = isToday ? schedule.filter(b => { const s = parse(b.startTime); return s >= h && s < h + 1; }) : [];
-                return (
-                  <div key={di} className={clsx("border-t border-l border-[#ECE9E1] h-20 relative", isToday && "bg-[#20808D]/[0.03]")}>
-                    {blocks.map((b, bi) => (
-                      <div key={bi} className="absolute inset-x-1 top-1 bg-[#20808D]/15 border border-[#20808D]/40 rounded-md p-1.5 overflow-hidden">
-                        <div className="text-[10px] text-[#13343B] truncate font-medium">{b.title}</div>
-                        <div className="text-[9px] text-[#20808D]">{b.startTime}</div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </React.Fragment>
-          ))}
+
+        {/* Body */}
+        <div className="grid" style={{ gridTemplateColumns: gridTpl }}>
+          {/* Time gutter */}
+          <div className="relative bg-black/[0.015]" style={{ height: bodyH }}>
+            {hours.map((h, hi) => (
+              <div key={h} className="absolute right-2 text-[10px] text-[#9AA7A9] font-bold uppercase -translate-y-1/2" style={{ top: hi * HOURPX }}>{hourLabel(h)}</div>
+            ))}
+          </div>
+          {/* Day columns */}
+          {days.map((d, di) => {
+            const isToday = d.toDateString() === today.toDateString();
+            return (
+              <div key={di} className={clsx("relative border-l border-[#ECE9E1]", isToday && "bg-[#20808D]/[0.03]")} style={{ height: bodyH }}>
+                {hours.map((h, hi) => (
+                  <div key={h} className="absolute left-0 right-0 border-t border-[#ECE9E1]" style={{ top: hi * HOURPX }} />
+                ))}
+                {isToday && laid.map(({ b, idx, start, end, col, cols }) => {
+                  const top = Math.max(0, (start - startH) * HOURPX);
+                  // True proportional height (just a 1px gap) — no inflated minimum, so adjacent
+                  // short blocks tile cleanly instead of overlapping the next one.
+                  const height = Math.max(3, Math.min((end - start) * HOURPX - 1, bodyH - top));
+                  const gap = 3;
+                  const inset = 4; // keep blocks clear of the column borders
+                  const colW = `((100% - ${inset * 2}px - ${gap * (cols - 1)}px) / ${cols})`;
+                  const w = `calc(${colW})`;
+                  const left = `calc(${inset}px + ${colW} * ${col} + ${gap * col}px)`;
+                  const tall = height > 22;
+                  return (
+                    <div
+                      key={b.taskId + idx}
+                      title={`${b.title} · ${b.startTime}–${b.endTime}`}
+                      className={clsx("absolute rounded-md bg-[#20808D]/15 border border-[#20808D]/40 overflow-hidden", tall && "px-1.5 py-1")}
+                      style={{ top, height, left, width: w }}
+                    >
+                      {tall && <div className="text-[10px] text-[#13343B] font-medium leading-tight line-clamp-2">{b.title}</div>}
+                      {height > 44 && <div className="text-[9px] text-[#20808D] tabular-nums mt-0.5">{b.startTime}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
-        <div className="text-[11px] text-[#5B6B6E] mt-4">Clutch currently plans the current day — future days fill in as you plan them.</div>
+        <div className="text-[11px] text-[#5B6B6E] p-3 border-t border-[#ECE9E1]">Clutch plans the current day — future days fill in as you plan them.</div>
       </div>
     </main>
+  );
+}
+
+// Themed dropdown. The option list is rendered in a portal so the parent card's overflow:hidden
+// (and rounded corners) can't clip it.
+function Dropdown({ value, onChange, options }: { value: number; onChange: (v: number) => void; options: { value: number; label: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxH: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === value);
+
+  const place = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({ top: r.bottom + 6, left: r.left, width: r.width, maxH: Math.min(240, window.innerHeight - r.bottom - 16) });
+  };
+  const toggle = () => { if (!open) place(); setOpen((o) => !o); };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    // Close when the PAGE scrolls (the anchor button moves), but ignore scrolling inside the menu itself.
+    const onScroll = (e: Event) => {
+      if (popRef.current && popRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative mt-1">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        className={clsx(
+          "w-full flex items-center justify-between gap-2 bg-white border rounded-xl px-3.5 py-2.5 text-sm text-[#13343B] transition-colors",
+          open ? "border-[#20808D]/60 shadow-[0_0_0_3px_rgba(32,128,141,0.10)]" : "border-[#E0DCD3] hover:border-[#20808D]/40"
+        )}
+      >
+        <span className="font-medium">{selected?.label}</span>
+        <ChevronDown className={clsx("w-4 h-4 text-[#9AA7A9] transition-transform duration-200 shrink-0", open && "rotate-180")} />
+      </button>
+      {open && pos && createPortal(
+        <motion.div
+          ref={popRef}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.13, ease: "easeOut" }}
+          style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH, zIndex: 100 }}
+          className="overflow-y-auto custom-scrollbar bg-white border border-[#E6E3DC] rounded-xl shadow-[0_18px_44px_rgba(19,52,59,0.16)] p-1.5"
+        >
+          {options.map((o) => {
+            const active = o.value === value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                className={clsx(
+                  "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between gap-2",
+                  active ? "bg-[#20808D]/10 text-[#13565F] font-semibold" : "text-[#13343B] hover:bg-[#F2F0EA]"
+                )}
+              >
+                {o.label}
+                {active && <Check className="w-3.5 h-3.5 text-[#20808D] shrink-0" />}
+              </button>
+            );
+          })}
+        </motion.div>,
+        document.body
+      )}
+    </div>
   );
 }
 
@@ -933,20 +1354,14 @@ function SettingsView() {
             <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Working hours</div>
             <p className="text-[12px] text-[#5B6B6E] mt-1">The window Clutch uses when planning your calendar.</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-start gap-4">
             <div className="flex-1">
               <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">Start</label>
-              <select value={settings.workStart} onChange={(e) => updateSettings({ workStart: Number(e.target.value) })}
-                className="w-full mt-1 bg-black/[0.04] border border-[#E0DCD3] rounded-lg px-3 py-2 text-sm text-[#13343B] outline-none focus:border-[#20808D]/50">
-                {hours.map(h => <option key={h} value={h} className="bg-[#FFFFFF]">{hourLabel(h)}</option>)}
-              </select>
+              <Dropdown value={settings.workStart} onChange={(v) => updateSettings({ workStart: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
             </div>
             <div className="flex-1">
               <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">End</label>
-              <select value={settings.workEnd} onChange={(e) => updateSettings({ workEnd: Number(e.target.value) })}
-                className="w-full mt-1 bg-black/[0.04] border border-[#E0DCD3] rounded-lg px-3 py-2 text-sm text-[#13343B] outline-none focus:border-[#20808D]/50">
-                {hours.map(h => <option key={h} value={h} className="bg-[#FFFFFF]">{hourLabel(h)}</option>)}
-              </select>
+              <Dropdown value={settings.workEnd} onChange={(v) => updateSettings({ workEnd: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
             </div>
           </div>
         </div>

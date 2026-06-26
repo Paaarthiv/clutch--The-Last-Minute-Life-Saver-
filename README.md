@@ -4,7 +4,7 @@
 
 Clutch is an **autonomous AI productivity agent**. You dump everything on your plate (by text or voice); Clutch reasons in multiple steps, then *takes action on your behalf* — creating tasks, breaking big goals into subtasks, prioritizing by urgency × importance, and time-blocking your day. When you fall behind, it proactively re-plans and tells you exactly what to keep, move, or drop.
 
-**🔗 Live demo:** https://clutch-the-last-minute-life-saver.onrender.com
+**Live demo:** Deploy the final submission on Google Cloud Run and paste the public URL here before submitting.
 
 ---
 
@@ -56,7 +56,7 @@ The server runs an iterative loop (call → execute tools with real IDs → feed
 - **Backend:** Node.js + Express, `@google/genai` (Gemini function calling), dotenv
 - **AI:** **Google Gemini** (configurable model, e.g. `gemini-2.0-flash` / `gemini-2.5-flash`) driving the agentic function-calling loop
 - **Typography:** **Google Fonts** (Inter + Space Grotesk)
-- **Deploy:** Render (Node web service)
+- **Deploy:** Google Cloud Run (Node web service)
 
 ---
 
@@ -85,14 +85,30 @@ npm start            # serves the built app on $PORT (default 3000)
 
 ---
 
-## ☁️ Deployment
+## Cloud Deployment
 
-Deployed on **Render** as a Node web service:
-- **Build:** `npm install; npm run build`
-- **Start:** `npm run start`
-- **Env:** `GEMINI_API_KEY`, `GEMINI_MODEL`
+The hackathon requires the final deployable link to be hosted on Google Cloud. This app is Cloud Run-ready:
 
-Auto-deploys on every push to `main`.
+- **Build:** `npm ci && npm run build`
+- **Start:** `npm start`
+- **Required env:** `GEMINI_API_KEY`
+- **Optional env:** `GEMINI_MODEL=gemini-2.5-flash`
+
+Recommended production target: **Google Cloud Run** with the Gemini key stored in **Secret Manager**.
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the exact Cloud Shell steps.
+
+## Submission Demo Flow
+
+Use this path for the judging demo:
+
+1. Brain-dump several tasks at once, including a deadline-heavy one like exam prep.
+2. Show Clutch creating structured tasks automatically.
+3. Open Priorities and show NOW / NEXT / LATER with one-line reasoning.
+4. Show the time-blocked schedule.
+5. Click **Break down** on Exam prep and show generated subtasks.
+6. Drop one task and show the replan recommendation.
+7. Open Insights or Calendar to show the broader productivity dashboard.
 
 ---
 
