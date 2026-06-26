@@ -553,27 +553,19 @@ function AgentActivityFeed() {
         )}
 
         {!collapsed && (<>
-        <div className="xl:flex-1 text-[10px] space-y-4 overflow-y-auto overflow-x-hidden pr-2 pb-6 xl:pb-20 max-h-80 xl:max-h-none custom-scrollbar">
-          <AnimatePresence>
+        <div className="activity-scroll xl:flex-1 text-[10px] space-y-4 overflow-y-auto overflow-x-hidden pr-2 pb-6 xl:pb-20 max-h-80 xl:max-h-none custom-scrollbar">
             {isThinking && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="flex gap-3"
-              >
+              <div className="flex gap-3">
                 <div className="w-1 h-1 bg-[#20808D] rounded-full mt-1.5 shrink-0 animate-pulse" />
                 <div className="min-w-0">
                   <div className="text-[#5B6B6E] mb-0.5">Analyzing...</div>
                   <div className="leading-relaxed opacity-70">Agent is thinking</div>
                 </div>
-              </motion.div>
+              </div>
             )}
             {activityFeed.map((action, i) => (
-              <motion.div
+              <div
                 key={action.id}
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
                 className={clsx("flex gap-3", i > 5 && "opacity-50")}
               >
                 <div className={clsx("w-1 h-1 rounded-full mt-1.5 shrink-0", i === 0 ? "bg-[#20808D]" : "bg-[#C2CACB]")} />
@@ -583,9 +575,8 @@ function AgentActivityFeed() {
                   </div>
                   <div className="leading-relaxed text-[#5B6B6E] break-words">{action.description}</div>
                 </div>
-              </motion.div>
+              </div>
             ))}
-          </AnimatePresence>
         </div>
 
         <div className="p-4 glass-bar bg-[#20808D]/5 border-[#20808D]/20 rounded-xl mt-auto shrink-0 mb-6">
