@@ -104,6 +104,12 @@ button:disabled {
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
 }
+.timeline-scroll {
+  contain: layout paint style;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
 
 .glass-bar {
   background: var(--color-canvas-card);

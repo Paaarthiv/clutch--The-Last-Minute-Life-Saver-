@@ -399,7 +399,7 @@ function TimelineColumn() {
         <span className="text-[10px] text-[#20808D] font-bold">{schedule.length} Block(s) Scheduled</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto w-full custom-scrollbar p-4">
+      <div className="timeline-scroll flex-1 overflow-y-auto w-full custom-scrollbar p-4">
         {blocks.length === 0 ? (
           <div className="h-full min-h-[360px] flex flex-col items-center justify-center text-center">
             <Calendar className="w-8 h-8 text-[#13343B]/20 mb-3" />
@@ -407,18 +407,14 @@ function TimelineColumn() {
             <p className="text-[#9AA7A9] text-xs mt-1">Plan some tasks and your timed day appears here.</p>
           </div>
         ) : (
-          <AnimatePresence>
+          <>
             {blocks.map(({ b: block, idx, start, end }, i) => {
               const isCurrent = nowDec >= start && nowDec < end;
               const isPast = nowDec >= end;
               const dur = (end - start) * 60;
               return (
-                <motion.div
+                <div
                   key={block.taskId + idx}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={{ delay: Math.min(i * 0.04, 0.3) }}
                   className="flex gap-3"
                 >
                   {/* Time gutter */}
@@ -443,10 +439,10 @@ function TimelineColumn() {
                       {isCurrent && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#20808D] animate-pulse" />Now</span>}
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
-          </AnimatePresence>
+          </>
         )}
       </div>
     </div>
