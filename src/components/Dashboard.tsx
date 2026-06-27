@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAgent } from "../AgentContext";
 import { ScheduledBlock } from "../types";
-import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, X, Check, Zap, BatteryLow, ArrowRight } from "lucide-react";
+import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, X, Check, Zap, BatteryLow, ArrowRight, ImagePlus, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { format } from "date-fns";
 import clsx from "clsx";
@@ -28,6 +28,29 @@ function LoadBadge({ load }: { load?: string }) {
       {m.label}
     </span>
   );
+}
+
+// Clutch speaks — try Google Cloud TTS (premium voice), fall back to the browser voice.
+let clutchAudio: HTMLAudioElement | null = null;
+async function speakText(text: string) {
+  if (clutchAudio) { clutchAudio.pause(); clutchAudio = null; }
+  try { window.speechSynthesis?.cancel(); } catch {}
+  try {
+    const res = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    if (res.ok && (res.headers.get("content-type") || "").includes("audio")) {
+      const url = URL.createObjectURL(await res.blob());
+      const audio = new Audio(url);
+      clutchAudio = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); if (clutchAudio === audio) clutchAudio = null; };
+      await audio.play();
+      return;
+    }
+  } catch { /* fall through to browser voice */ }
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1;
+    window.speechSynthesis?.speak(u);
+  } catch {}
 }
 
 // A small "!" badge that reveals a detailed feature explanation on hover/focus (or tap).
@@ -167,6 +190,34 @@ const CLOUD_PILLS: CloudPill[] = [
   { label: "Pay bills",    top: "84%", left: "72%", size: 13, rot: 3,  dur: 6.1, delay: 1.2 },
 ];
 
+// Downscale + JPEG-compress a picked image so a phone photo fits comfortably in one request.
+async function fileToCompressedImage(file: File): Promise<{ mimeType: string; data: string }> {
+  const dataUrl: string = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result as string);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+  const img: HTMLImageElement = await new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = dataUrl;
+  });
+  const maxDim = 1280;
+  let { width, height } = img;
+  if (Math.max(width, height) > maxDim) {
+    const scale = maxDim / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width; canvas.height = height;
+  canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+  const out = canvas.toDataURL("image/jpeg", 0.72);
+  return { mimeType: "image/jpeg", data: out.split(",")[1] };
+}
+
 function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
   const { tasks, isThinking, executeAgentAction, runRescue, settings } = useAgent();
   const hasTasks = tasks.some((t) => t.status === "idle");
@@ -215,6 +266,17 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
     setInput("");
   };
 
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const onImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file || isThinking) return;
+    try {
+      const image = await fileToCompressedImage(file);
+      executeAgentAction("", undefined, undefined, { image });
+    } catch { /* ignore decode errors */ }
+  };
+
   return (
     <div className="w-full xl:flex-1 flex flex-col items-center gap-3 xl:h-full min-h-0 xl:py-4">
       {/* Scattered "tap to add" task pills — pretty, messy cloud that fills the space */}
@@ -246,6 +308,10 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
       {/* Chat input */}
       <form onSubmit={handleSubmit} className="capture-glow w-full max-w-[480px] shrink-0">
         <div className="glass-bar p-3 flex items-center gap-3 w-full">
+          <input ref={imgInputRef} type="file" accept="image/*" capture="environment" onChange={onImagePick} className="hidden" />
+          <button type="button" onClick={() => imgInputRef.current?.click()} disabled={isThinking} title="Snap or upload a photo of your to-do list" className="shrink-0 text-[#5B6B6E] hover:text-[#20808D] transition-colors disabled:opacity-40">
+            <ImagePlus className="w-5 h-5" />
+          </button>
           {settings.voiceEnabled && (
             <button type="button" onClick={startRecording} className={clsx("transition-colors relative shrink-0", isRecording ? "text-[#20808D]" : "text-[#5B6B6E] hover:text-[#13343B]")}>
               {isRecording && <span className="absolute inset-[-4px] bg-[#20808D]/20 rounded-full animate-ping" />}
@@ -844,11 +910,20 @@ function RescueModal() {
         className="glass-card w-full max-w-lg border-[#E0DCD3] max-h-[88vh] flex flex-col p-0 overflow-hidden"
       >
         <div className="p-6 pb-5 bg-gradient-to-br from-[#FFF3EC] to-white border-b border-[#F0E2D8] shrink-0">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#E0602C] to-[#C2410C] flex items-center justify-center shadow-[0_6px_16px_rgba(194,65,12,0.3)]">
-              <Zap className="w-5 h-5 text-white" />
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#E0602C] to-[#C2410C] flex items-center justify-center shadow-[0_6px_16px_rgba(194,65,12,0.3)]">
+                <Zap className="w-5 h-5 text-white" />
+              </div>
+              <h2 className="text-lg font-display font-bold text-[#13343B]">Clutch Mode</h2>
             </div>
-            <h2 className="text-lg font-display font-bold text-[#13343B]">Clutch Mode</h2>
+            <button
+              onClick={() => speakText([rescueState.message, rescueState.firstStep ? `First, ${rescueState.firstStep}` : "", rescueState.doNow.length ? `Do now: ${rescueState.doNow.map((d) => getTitle(d.taskId)).join(", ")}.` : ""].filter(Boolean).join(" "))}
+              title="Read this plan aloud"
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-[#C2410C] hover:text-[#9A330A] px-2.5 py-1.5 rounded-lg hover:bg-[#C2410C]/[0.06] transition-colors shrink-0"
+            >
+              <Volume2 className="w-4 h-4" /> Listen
+            </button>
           </div>
           <p className="text-[15px] text-[#5B6B6E] leading-relaxed">{rescueState.message}</p>
         </div>

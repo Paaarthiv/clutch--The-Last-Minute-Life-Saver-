@@ -24,7 +24,7 @@ interface AppState {
 interface AgentContextType extends AppState {
   setTasks: React.Dispatch<React.SetStateAction<PrioritizedTask[]>>;
   setSchedule: React.Dispatch<React.SetStateAction<ScheduledBlock[]>>;
-  executeAgentAction: (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue" }) => Promise<void>;
+  executeAgentAction: (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue"; image?: { mimeType: string; data: string } }) => Promise<void>;
   markTaskStatus: (taskId: string, status: "idle" | "done" | "dropped" | "archived") => void;
   archiveTask: (id: string) => void;
   resolveReplan: (approved: boolean) => void;
@@ -163,7 +163,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
-  const executeAgentAction = async (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue" }) => {
+  const executeAgentAction = async (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue"; image?: { mimeType: string; data: string } }) => {
     setIsThinking(true);
     try {
       const currentContext = contextOverride || { tasks, schedule };
@@ -182,6 +182,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           peakStart: settings.peakStart,
           peakEnd: settings.peakEnd,
           mode: opts?.mode,
+          image: opts?.image,
         }),
       });
       const data = await res.json();

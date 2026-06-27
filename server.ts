@@ -389,12 +389,13 @@ async function startServer() {
 
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
-  app.use(express.json({ limit: "256kb" }));
+  // Larger limit so a (client-compressed) photo of a to-do list can ride along with the request.
+  app.use(express.json({ limit: "8mb" }));
   app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
+    res.setHeader("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()");
     next();
   });
 
@@ -428,8 +429,18 @@ async function startServer() {
   // Agent Endpoint
   app.post("/api/agent", async (req, res) => {
     try {
-      const { text, context, actionTrigger, now, workStart, workEnd, peakStart, peakEnd, mode } = req.body;
+      const { text, context, actionTrigger, now, workStart, workEnd, peakStart, peakEnd, mode, image } = req.body;
       const isRescue = mode === "rescue";
+
+      // Optional photo of a to-do list/whiteboard (Gemini Vision). Validate type + size defensively.
+      const ALLOWED_IMAGE = new Set(["image/jpeg", "image/png", "image/webp"]);
+      let visionPart: any = null;
+      if (image && typeof image === "object" && ALLOWED_IMAGE.has(image.mimeType) && typeof image.data === "string") {
+        const data = image.data.replace(/^data:[^,]+,/, ""); // tolerate a data: URL prefix
+        if (data.length > 0 && data.length < 9_000_000) {
+          visionPart = { inlineData: { mimeType: image.mimeType, data } };
+        }
+      }
       const safeText = toSafeString(text, MAX_AGENT_TEXT_CHARS);
       const safeActionTrigger = toSafeString(actionTrigger, MAX_ACTION_TRIGGER_CHARS);
 
@@ -489,12 +500,16 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
         systemInstruction += `\n\nBREAKDOWN REQUEST MODE: The user clicked Break down for this existing task: ${JSON.stringify(breakdownTarget)}. In this turn, call breakdown_goal exactly once. Use parentTaskId "${breakdownTarget.id}" and goalTitle "${breakdownTarget.title}". Create practical subtasks that add up roughly to the parent estimate when possible. Do not call create_tasks for this request and do not ask a follow-up question.`;
       }
 
-      let contents: Content[] = [
-        {
-          role: "user",
-          parts: [{ text: safeText || (safeActionTrigger ? `[System Trigger] ${safeActionTrigger}` : "Analyze my tasks.") }]
-        }
+      if (visionPart && !isRescue) {
+        systemInstruction += `\n\nIMAGE MODE: A photo of the user's to-do list (handwritten note, whiteboard, or screenshot) is attached. Read EVERY distinct task/item visible in it, then call create_tasks for all of them (estimate realistic minutes and cognitive_load for each), and prioritize as usual. Ignore decorations, dates, and headings — capture the actual to-dos.`;
+      }
+
+      const userParts: any[] = [
+        { text: safeText || (visionPart ? "Here's a photo of my tasks — read every item and plan them." : (safeActionTrigger ? `[System Trigger] ${safeActionTrigger}` : "Analyze my tasks.")) },
       ];
+      if (visionPart) userParts.push(visionPart);
+
+      let contents: Content[] = [{ role: "user", parts: userParts }];
       const calledTools = new Set<string>();
 
       for (let i = 0; i < 6; i++) {
@@ -694,6 +709,44 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
       console.error("[Clutch] /api/agent error:", error);
       const agentError = classifyAgentError(error);
       res.status(agentError.status).json({ error: agentError.message, code: agentError.code });
+    }
+  });
+
+  // Clutch speaks — Google Cloud Text-to-Speech. Lazily initialised so the app keeps working
+  // even where TTS isn't configured (the client falls back to the browser voice).
+  let ttsClient: any = null;
+  let ttsTried = false;
+  const getTtsClient = async () => {
+    if (ttsTried) return ttsClient;
+    ttsTried = true;
+    try {
+      const mod: any = await import("@google-cloud/text-to-speech");
+      ttsClient = new mod.TextToSpeechClient();
+    } catch (e: any) {
+      console.warn("[Clutch] Cloud TTS unavailable:", e?.message);
+      ttsClient = null;
+    }
+    return ttsClient;
+  };
+
+  app.post("/api/tts", async (req, res) => {
+    try {
+      const text = toSafeString(req.body?.text, 1500);
+      if (!text) { res.status(400).json({ error: "No text provided.", code: "BAD_REQUEST" }); return; }
+      const client = await getTtsClient();
+      if (!client) { res.status(503).json({ error: "Voice is not available.", code: "TTS_UNAVAILABLE" }); return; }
+      const [response] = await client.synthesizeSpeech({
+        input: { text },
+        voice: { languageCode: "en-US", name: "en-US-Neural2-F" },
+        audioConfig: { audioEncoding: "MP3", speakingRate: 1.0 },
+      });
+      if (!response?.audioContent) { res.status(502).json({ error: "No audio.", code: "TTS_FAILED" }); return; }
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "no-store");
+      res.send(Buffer.from(response.audioContent as Uint8Array));
+    } catch (e: any) {
+      console.error("[Clutch] /api/tts error:", e?.message);
+      res.status(502).json({ error: "Voice generation failed.", code: "TTS_FAILED" });
     }
   });
 
