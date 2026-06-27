@@ -281,7 +281,7 @@ async function fileToCompressedImage(file: File): Promise<{ mimeType: string; da
   return { mimeType: "image/jpeg", data: out.split(",")[1] };
 }
 
-function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
+function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement> }) {
   const { tasks, isThinking, executeAgentAction, runRescue, settings } = useAgent();
   const hasTasks = tasks.some((t) => t.status === "idle");
 
@@ -296,6 +296,16 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
 
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const resizeInput = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${Math.min(132, Math.max(24, el.scrollHeight))}px`;
+  };
+
+  useEffect(() => {
+    resizeInput();
+  }, [input]);
 
   const startRecording = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -372,13 +382,19 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
               <Mic className="w-5 h-5 relative z-10" />
             </button>
           )}
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e as any);
+              }
+            }}
             placeholder={isRecording ? "Listening..." : "What needs to get done?"}
-            className="bg-transparent border-none outline-none text-sm w-full placeholder:text-[#9AA7A9] text-[#13343B] flex-1"
+            rows={1}
+            className="bg-transparent border-none outline-none text-sm w-full placeholder:text-[#9AA7A9] text-[#13343B] flex-1 resize-none leading-6 max-h-32 overflow-y-auto custom-scrollbar py-1"
           />
           <button
             type="submit"
@@ -541,7 +557,7 @@ function PrioritiesPanel({ prioOpen, setPrioOpen }: { prioOpen: boolean; setPrio
 }
 
 // The Today board: chat on the left; Priorities bar + plan in the middle; activity on the right.
-function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
+function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement> }) {
   const { tasks } = useAgent();
   const [prioOpen, setPrioOpen] = useState(false);
   const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
@@ -1862,7 +1878,7 @@ function SettingsView() {
 export function Dashboard() {
   const { isThinking } = useAgent();
   const [activeView, setActiveView] = useState<View>('today');
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
   const handleNewTask = () => {
     setActiveView('today');

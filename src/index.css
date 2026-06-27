@@ -210,10 +210,11 @@ button:disabled {
 
 /* Scattered task-pill cloud — gentle bob, rotation held via the --rot custom property */
 @keyframes pillFloat {
-  0%, 100% { transform: rotate(var(--rot, 0deg)) translateY(0); }
-  50%      { transform: rotate(var(--rot, 0deg)) translateY(-5px); }
+  0%, 100% { transform: rotate(var(--rot, 0deg)) translate3d(0, 0, 0); }
+  35%      { transform: rotate(calc(var(--rot, 0deg) + 1.5deg)) translate3d(8px, -10px, 0); }
+  70%      { transform: rotate(calc(var(--rot, 0deg) - 1deg)) translate3d(-6px, 5px, 0); }
 }
-.pill-float { animation: pillFloat var(--dur, 6s) ease-in-out var(--delay, 0s) infinite; }
+.pill-float { animation: pillFloat var(--dur, 8s) ease-in-out var(--delay, 0s) infinite; will-change: transform; }
 .pill-float:hover { animation-play-state: paused; }
 .priority-modal-open .pill-float,
 .priority-modal-open .capture-glow::before,
