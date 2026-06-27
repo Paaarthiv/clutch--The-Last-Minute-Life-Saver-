@@ -54,16 +54,24 @@ async function speakText(text: string) {
 }
 
 // Google Calendar sync via Google Identity Services (client-side token flow — no server tokens).
-const GCAL_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const FALLBACK_GCAL_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID as string | undefined;
 const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+let runtimeConfigPromise: Promise<{ googleCalendarClientId?: string }> | null = null;
 
-function gcalGetToken(): Promise<string> {
+function loadRuntimeConfig() {
+  runtimeConfigPromise ??= fetch("/api/config", { cache: "no-store" })
+    .then((res) => (res.ok ? res.json() : {}))
+    .catch(() => ({}));
+  return runtimeConfigPromise;
+}
+
+function gcalGetToken(clientId: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const g = (window as any).google;
-    if (!GCAL_CLIENT_ID) { reject(new Error("Calendar isn't configured.")); return; }
+    if (!clientId) { reject(new Error("Calendar isn't configured.")); return; }
     if (!g?.accounts?.oauth2) { reject(new Error("Google sign-in is still loading — try again in a moment.")); return; }
     const client = g.accounts.oauth2.initTokenClient({
-      client_id: GCAL_CLIENT_ID,
+      client_id: clientId,
       scope: GCAL_SCOPE,
       callback: (resp: any) => (resp?.access_token ? resolve(resp.access_token) : reject(new Error("Calendar access was not granted."))),
       error_callback: (err: any) => reject(new Error(err?.message || "Calendar sign-in was cancelled.")),
@@ -72,8 +80,8 @@ function gcalGetToken(): Promise<string> {
   });
 }
 
-async function addBlocksToCalendar(blocks: ScheduledBlock[]): Promise<number> {
-  const token = await gcalGetToken();
+async function addBlocksToCalendar(blocks: ScheduledBlock[], clientId: string): Promise<number> {
+  const token = await gcalGetToken(clientId);
   const now = new Date();
   const y = now.getFullYear(), mo = now.getMonth() + 1, d = now.getDate();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -678,11 +686,21 @@ function TimelineColumn() {
 
   const [calState, setCalState] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [calMsg, setCalMsg] = useState("");
+  const [calendarClientId, setCalendarClientId] = useState(() => FALLBACK_GCAL_CLIENT_ID || "");
+
+  useEffect(() => {
+    let cancelled = false;
+    loadRuntimeConfig().then((config) => {
+      if (!cancelled) setCalendarClientId(config.googleCalendarClientId || FALLBACK_GCAL_CLIENT_ID || "");
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   const syncCal = async () => {
-    if (!schedule.length || calState === "syncing") return;
+    if (!schedule.length || calState === "syncing" || !calendarClientId) return;
     setCalState("syncing");
     try {
-      const n = await addBlocksToCalendar(schedule);
+      const n = await addBlocksToCalendar(schedule, calendarClientId);
       setCalMsg(String(n));
       setCalState("done");
       setTimeout(() => setCalState("idle"), 4000);
@@ -705,7 +723,7 @@ function TimelineColumn() {
         <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-[#20808D] font-bold whitespace-nowrap">{schedule.length} Block(s)</span>
-          {GCAL_CLIENT_ID && schedule.length > 0 && (
+          {calendarClientId && schedule.length > 0 && (
             <button
               onClick={syncCal}
               disabled={calState === "syncing"}

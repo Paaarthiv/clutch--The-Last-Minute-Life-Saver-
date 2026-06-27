@@ -439,6 +439,16 @@ async function startServer() {
   app.use("/api/state/save", createRateLimiter("state-save", STATE_SAVE_RATE_LIMIT_MAX));
   app.use("/api/state/load", createRateLimiter("state-load", STATE_LOAD_RATE_LIMIT_MAX));
 
+  app.get("/api/config", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      googleCalendarClientId: toSafeString(
+        process.env.GOOGLE_CALENDAR_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID,
+        256
+      ),
+    });
+  });
+
   // Agent Endpoint
   app.post("/api/agent", async (req, res) => {
     try {
