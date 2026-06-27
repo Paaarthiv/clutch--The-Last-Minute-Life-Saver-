@@ -1875,7 +1875,7 @@ function SettingsView() {
 
         <div className="glass-card p-6 border-[#FF4D4D]/20">
           <div className="text-sm font-semibold text-[#FF4D4D] mb-1">Danger zone</div>
-          <div className="text-[12px] text-[#5B6B6E] mb-4">Permanently delete all tasks, schedule, and activity.</div>
+          <div className="text-[12px] text-[#5B6B6E] mb-4">Permanently delete local and cloud-synced tasks, schedule, activity, and settings.</div>
           <button onClick={() => { if (window.confirm("Delete all Clutch data? This cannot be undone.")) clearAllData(); }}
             className="px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-widest text-[#FF4D4D] border border-[#FF4D4D]/30 hover:bg-[#FF4D4D]/10 transition-colors">
             Clear all data

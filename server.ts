@@ -187,6 +187,7 @@ const AGENT_RATE_LIMIT_MAX = Number(process.env.AGENT_RATE_LIMIT_PER_MINUTE) || 
 const TTS_RATE_LIMIT_MAX = Number(process.env.TTS_RATE_LIMIT_PER_MINUTE) || 12;
 const STATE_SAVE_RATE_LIMIT_MAX = Number(process.env.STATE_SAVE_RATE_LIMIT_PER_MINUTE) || 20;
 const STATE_LOAD_RATE_LIMIT_MAX = Number(process.env.STATE_LOAD_RATE_LIMIT_PER_MINUTE) || 40;
+const STATE_DELETE_RATE_LIMIT_MAX = Number(process.env.STATE_DELETE_RATE_LIMIT_PER_MINUTE) || 10;
 
 type AgentErrorInfo = {
   status: number;
@@ -522,6 +523,7 @@ async function startServer() {
   app.use("/api/tts", createRateLimiter("tts", TTS_RATE_LIMIT_MAX));
   app.use("/api/state/save", createRateLimiter("state-save", STATE_SAVE_RATE_LIMIT_MAX));
   app.use("/api/state/load", createRateLimiter("state-load", STATE_LOAD_RATE_LIMIT_MAX));
+  app.use("/api/state/delete", createRateLimiter("state-delete", STATE_DELETE_RATE_LIMIT_MAX));
 
   app.get("/api/config", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -912,6 +914,24 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
     } catch (e: any) {
       console.error("[Clutch] /api/state/load error:", e?.message);
       res.status(502).json({ error: "Load failed.", code: "FS_LOAD_FAILED" });
+    }
+  });
+
+  app.post("/api/state/delete", async (req, res) => {
+    try {
+      const { clientId } = req.body || {};
+      if (!isValidClientId(clientId)) {
+        res.status(400).json({ error: "Bad request.", code: "BAD_REQUEST" });
+        return;
+      }
+      const client = await getFsClient();
+      if (!client) { res.status(503).json({ error: "Cloud storage unavailable.", code: "FS_UNAVAILABLE" }); return; }
+      await client.collection("clutch_states").doc(clientId).delete();
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[Clutch] /api/state/delete error:", e?.message);
+      res.status(502).json({ error: "Delete failed.", code: "FS_DELETE_FAILED" });
     }
   });
 

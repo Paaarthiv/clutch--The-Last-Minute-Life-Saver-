@@ -334,7 +334,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   }, [activityFeed]);
 
   // ----- Firestore cloud sync (additive mirror; localStorage stays the live store) -----
-  const clientId = useMemo(() => {
+  const [clientId, setClientId] = useState(() => {
     try {
       let id = localStorage.getItem("clutch_client_id");
       if (!id) {
@@ -343,8 +343,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       }
       return id;
     } catch { return "anon-client-0"; }
-  }, []);
+  });
   const hydratedRef = useRef(false);
+  const skipNextCloudSaveRef = useRef(false);
 
   // On first load, if there's nothing local, restore the snapshot from Firestore.
   useEffect(() => {
@@ -372,6 +373,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   // Mirror state to Firestore (debounced), once the initial restore has been attempted.
   useEffect(() => {
     if (!hydratedRef.current) return;
+    if (skipNextCloudSaveRef.current) {
+      skipNextCloudSaveRef.current = false;
+      return;
+    }
     const t = setTimeout(() => {
       fetch("/api/state/save", {
         method: "POST",
@@ -549,14 +554,30 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   };
 
   const clearAllData = () => {
+    const oldClientId = clientId;
+    const nextClientId = (typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `c${Date.now()}${Math.random().toString(36).slice(2)}`;
+    skipNextCloudSaveRef.current = true;
     setTasks([]);
     setSchedule([]);
     setActivityFeed([]);
+    setReplanState(null);
+    setRescueState(null);
+    setSettings(DEFAULT_SETTINGS);
+    setClientId(nextClientId);
     try {
       localStorage.removeItem("clutch_tasks");
       localStorage.removeItem("clutch_schedule");
       localStorage.removeItem("clutch_activity");
+      localStorage.removeItem("clutch_settings");
+      localStorage.setItem("clutch_client_id", nextClientId);
     } catch (e) {}
+    fetch("/api/state/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId: oldClientId }),
+    }).catch(() => {});
   };
 
   return (
