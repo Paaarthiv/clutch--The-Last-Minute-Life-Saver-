@@ -241,16 +241,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
 // so they spread across whatever space is available without scrolling. A couple are teal-accented.
 type CloudPill = { label: string; top: string; left: string; size: number; accent?: boolean; rot: number; dur: number; delay: number; wx: number; wy: number };
 const CLOUD_PILLS: CloudPill[] = [
-  { label: "Exam prep",    top: "18%", left: "32%", size: 17, accent: true,  rot: -4, dur: 18, delay: 0.0, wx: 54,  wy: 30 },
-  { label: "Gym",          top: "17%", left: "70%", size: 14, rot: 5,  dur: 20, delay: 1.6, wx: -46, wy: 38 },
-  { label: "Dentist",      top: "34%", left: "18%", size: 13, rot: 3,  dur: 22, delay: 0.8, wx: 42,  wy: -26 },
-  { label: "Reply emails", top: "37%", left: "54%", size: 15, rot: -2, dur: 19, delay: 2.2, wx: -58, wy: 34 },
-  { label: "Slide deck",   top: "50%", left: "76%", size: 14, rot: -5, dur: 21, delay: 1.4, wx: -50, wy: -34 },
-  { label: "Groceries",    top: "55%", left: "30%", size: 13, rot: 2,  dur: 23, delay: 2.8, wx: 48,  wy: 36 },
-  { label: "Workout",      top: "68%", left: "58%", size: 16, accent: true,  rot: -3, dur: 20, delay: 0.5, wx: 54,  wy: -44 },
-  { label: "Call mom",     top: "68%", left: "20%", size: 13, rot: 4,  dur: 24, delay: 3.2, wx: 46,  wy: -38 },
-  { label: "Read 30 min",  top: "83%", left: "42%", size: 14, rot: -2, dur: 21, delay: 1.0, wx: -42, wy: -48 },
-  { label: "Pay bills",    top: "84%", left: "72%", size: 13, rot: 3,  dur: 22, delay: 2.4, wx: -52, wy: -34 },
+  { label: "Exam prep",    top: "13%", left: "36%", size: 17, accent: true,  rot: -7, dur: 18, delay: 0.0, wx: 28,  wy: -16 },
+  { label: "Gym",          top: "20%", left: "76%", size: 14, rot: 6,  dur: 20, delay: 1.6, wx: -24, wy: 16 },
+  { label: "Dentist",      top: "32%", left: "17%", size: 13, rot: -3, dur: 22, delay: 0.8, wx: 26,  wy: -12 },
+  { label: "Reply emails", top: "28%", left: "57%", size: 15, rot: 4,  dur: 19, delay: 2.2, wx: -30, wy: -14 },
+  { label: "Slide deck",   top: "38%", left: "83%", size: 14, rot: -6, dur: 21, delay: 1.4, wx: -22, wy: -18 },
+  { label: "Groceries",    top: "66%", left: "28%", size: 13, rot: 5,  dur: 23, delay: 2.8, wx: 22,  wy: 18 },
+  { label: "Workout",      top: "74%", left: "61%", size: 16, accent: true,  rot: -4, dur: 20, delay: 0.5, wx: 28,  wy: -18 },
+  { label: "Call mom",     top: "79%", left: "18%", size: 13, rot: 7,  dur: 24, delay: 3.2, wx: 24,  wy: -12 },
+  { label: "Read 30 min",  top: "90%", left: "44%", size: 14, rot: -5, dur: 21, delay: 1.0, wx: -24, wy: -18 },
+  { label: "Pay bills",    top: "87%", left: "76%", size: 13, rot: 3,  dur: 22, delay: 2.4, wx: -26, wy: -12 },
 ];
 
 // Downscale + JPEG-compress a picked image so a phone photo fits comfortably in one request.
