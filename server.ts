@@ -401,12 +401,19 @@ function wordsForMatch(value: string): string[] {
 
 function attachExplicitTimeWindows(text: string, tasks: any[]) {
   if (!text || !tasks.length) return;
-  const rangeRe = /(?:from\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:to|until|till|-)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/gi;
+  const rangeRe = /(?:from\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:to|until|till|–|—|-)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/gi;
   const ranges = [...text.matchAll(rangeRe)];
+  const apOf = (s: string) => (/pm/i.test(s) ? "pm" : /am/i.test(s) ? "am" : "");
 
   for (const match of ranges) {
-    const start = normalizeTime(match[1]);
-    const end = normalizeTime(match[2]);
+    // Inherit am/pm across the range so "4 to 6pm" and "4pm-6" both resolve to 16:00–18:00.
+    let rawStart = match[1].trim();
+    let rawEnd = match[2].trim();
+    const apS = apOf(rawStart), apE = apOf(rawEnd);
+    if (!apS && apE) rawStart = `${rawStart} ${apE}`;
+    if (!apE && apS) rawEnd = `${rawEnd} ${apS}`;
+    const start = normalizeTime(rawStart);
+    const end = normalizeTime(rawEnd);
     if (!start || !end) continue;
 
     const before = text.slice(Math.max(0, match.index - 90), match.index).toLowerCase();
@@ -589,7 +596,7 @@ async function startServer() {
       let systemInstruction = `You are Clutch, a premium autonomous AI productivity agent. You help the user plan their day, break down goals, and beat deadlines.
 You do NOT just generate text. You call tools to update the user's state directly.
 For EVERY task you create, set its cognitive_load: 'deep' for hard-focus work (studying, writing, coding, designing), 'admin' for low-effort chores (emails, errands, quick calls, payments), 'light' otherwise.
-If the user gives an exact time window for a task (example: "gym from 6pm to 8pm", "meeting 14:00-15:00"), put that task's scheduled_start_time and scheduled_end_time in HH:mm 24h format. Do not put those exact times on unrelated tasks.
+FIXED TIMES (important): If the user gives a fixed time for a task — a range ("gym 4pm-6pm", "meeting 14:00-15:00") OR a single start ("gym at 4pm", "call at 3") — you MUST set that task's scheduled_start_time in HH:mm 24h (e.g. "16:00"), and scheduled_end_time too when a range or duration is given. Carry am/pm across a range ("4 to 6pm" means 16:00–18:00). Match the time to the RIGHT task only; never put these exact times on unrelated tasks. A task with a fixed time is locked to that slot regardless of its priority.
 When the user asks to break down an existing task, you MUST call breakdown_goal with 3-6 concrete, ordered subtasks. Do not ask the user for subtasks. Use the exact parentTaskId if one is provided.
 When the user adds or changes tasks, in the SAME turn you MUST: (1) call create_tasks, then after you receive the created tasks with their ids, (2) call prioritize over ALL current tasks assigning each a category of NOW, NEXT, or LATER with a short one-line reason. The day's time-blocked plan is built automatically from your priorities (NOW first, then NEXT, then LATER), so you do NOT schedule times yourself — just get the categories and ordering right. The user's current local time is ${nowTime} and working hours are ${fmtH(startH)}–${fmtH(endH)}; factor that into urgency.
 Always use the EXACT task ids you were given. Only use replan when the user reports being late or drops a task.

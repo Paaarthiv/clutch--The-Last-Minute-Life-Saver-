@@ -240,17 +240,21 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
 // Scattered "tap-to-add" task pills. Positions are percentages of the cloud area (centre points),
 // so they spread across whatever space is available without scrolling. A couple are teal-accented.
 type CloudPill = { label: string; top: string; left: string; size: number; accent?: boolean; rot: number; dur: number; delay: number; wx: number; wy: number };
+// Two clusters — a TOP group (≤30%) and a BOTTOM group (≥70%) — leaving a clear band in the
+// middle for the command bar + Clutch Mode / I'm wiped, so the wandering pills never collide.
 const CLOUD_PILLS: CloudPill[] = [
-  { label: "Exam prep",    top: "13%", left: "36%", size: 17, accent: true,  rot: -7, dur: 18, delay: 0.0, wx: 28,  wy: -16 },
-  { label: "Gym",          top: "20%", left: "76%", size: 14, rot: 6,  dur: 20, delay: 1.6, wx: -24, wy: 16 },
-  { label: "Dentist",      top: "32%", left: "17%", size: 13, rot: -3, dur: 22, delay: 0.8, wx: 26,  wy: -12 },
-  { label: "Reply emails", top: "28%", left: "57%", size: 15, rot: 4,  dur: 19, delay: 2.2, wx: -30, wy: -14 },
-  { label: "Slide deck",   top: "38%", left: "83%", size: 14, rot: -6, dur: 21, delay: 1.4, wx: -22, wy: -18 },
-  { label: "Groceries",    top: "66%", left: "28%", size: 13, rot: 5,  dur: 23, delay: 2.8, wx: 22,  wy: 18 },
-  { label: "Workout",      top: "74%", left: "61%", size: 16, accent: true,  rot: -4, dur: 20, delay: 0.5, wx: 28,  wy: -18 },
-  { label: "Call mom",     top: "79%", left: "18%", size: 13, rot: 7,  dur: 24, delay: 3.2, wx: 24,  wy: -12 },
-  { label: "Read 30 min",  top: "90%", left: "44%", size: 14, rot: -5, dur: 21, delay: 1.0, wx: -24, wy: -18 },
-  { label: "Pay bills",    top: "87%", left: "76%", size: 13, rot: 3,  dur: 22, delay: 2.4, wx: -26, wy: -12 },
+  // top cluster
+  { label: "Exam prep",    top: "7%",  left: "34%", size: 17, accent: true, rot: -7, dur: 18, delay: 0.0, wx: 22,  wy: -10 },
+  { label: "Reply emails", top: "10%", left: "60%", size: 15, rot: 4,  dur: 19, delay: 2.2, wx: -22, wy: -8 },
+  { label: "Gym",          top: "16%", left: "80%", size: 14, rot: 6,  dur: 20, delay: 1.6, wx: -18, wy: 10 },
+  { label: "Dentist",      top: "24%", left: "16%", size: 13, rot: -3, dur: 22, delay: 0.8, wx: 20,  wy: -8 },
+  { label: "Slide deck",   top: "27%", left: "62%", size: 14, rot: -6, dur: 21, delay: 1.4, wx: -16, wy: -10 },
+  // bottom cluster
+  { label: "Groceries",    top: "72%", left: "26%", size: 13, rot: 5,  dur: 23, delay: 2.8, wx: 20,  wy: 10 },
+  { label: "Pay bills",    top: "75%", left: "80%", size: 13, rot: 3,  dur: 22, delay: 2.4, wx: -20, wy: 8 },
+  { label: "Workout",      top: "82%", left: "58%", size: 16, accent: true, rot: -4, dur: 20, delay: 0.5, wx: 22,  wy: 10 },
+  { label: "Call mom",     top: "87%", left: "18%", size: 13, rot: 7,  dur: 24, delay: 3.2, wx: 18,  wy: 8 },
+  { label: "Read 30 min",  top: "92%", left: "48%", size: 14, rot: -5, dur: 21, delay: 1.0, wx: -18, wy: 8 },
 ];
 
 // Downscale + JPEG-compress a picked image so a phone photo fits comfortably in one request.
@@ -345,9 +349,24 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
     } catch { /* ignore decode errors */ }
   };
 
+  // The ambient pills only look good with room to breathe — hide them when the column gets
+  // narrow (e.g. when the sidebar is expanded) so they don't crowd/collide with the command bar.
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [showPills, setShowPills] = useState(true);
+  useEffect(() => {
+    const el = columnRef.current;
+    if (!el) return;
+    const update = () => setShowPills(el.clientWidth >= 470);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="w-full xl:flex-1 xl:min-w-[360px] xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-4 py-10">
-      {/* Decorative task-pill cloud behind the command bar. */}
+    <div ref={columnRef} className="w-full xl:flex-1 xl:min-w-[360px] xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-4 py-10">
+      {/* Decorative task-pill cloud behind the command bar (hidden when the column is narrow). */}
+      {showPills && (
       <div className="absolute inset-x-0 top-10 bottom-0 pointer-events-none select-none opacity-70">
         {CLOUD_PILLS.map((p, i) => (
           <div
@@ -378,6 +397,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
           </div>
         ))}
       </div>
+      )}
 
       <div className="relative z-10 w-full max-w-[560px] space-y-3">
       {/* Chat input */}
@@ -424,9 +444,15 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
             <button
               onClick={runRescue}
               disabled={isThinking}
-              className="clutch-glow w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-[#20808D] to-[#13565F] hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50"
+              onMouseMove={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+                e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+              }}
+              className="clutch-glass w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white active:scale-[0.98] transition-transform disabled:opacity-50"
             >
-              <Zap className="w-4 h-4" /> Clutch Mode
+              <span className="cursor-light" aria-hidden="true" />
+              <span className="relative z-10 flex items-center gap-2"><Zap className="w-4 h-4" /> Clutch Mode</span>
             </button>
             <div className="absolute -top-2 -right-2 z-20">
               <InfoHint title="Clutch Mode — your panic button" tone="onDark">

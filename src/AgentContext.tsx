@@ -96,7 +96,7 @@ function deconflictSchedule(
     .map((block, index) => {
       const range = blockRange(block, windowStart, windowEnd);
       const task = taskById.get(block.taskId);
-      const fixed = Boolean(task?.scheduledStartTime && task?.scheduledEndTime);
+      const fixed = Boolean(task?.scheduledStartTime);
       return { block, index, fixed, duration: range.end - range.start, ...range };
     })
     .sort((a, b) => Number(b.fixed) - Number(a.fixed) || a.start - b.start || a.index - b.index);
@@ -165,8 +165,10 @@ function buildSchedule(tasks: PrioritizedTask[], settings: Settings): ScheduledB
   const pinned = schedulable
     .map((t) => {
       const rawStart = parseHM(t.scheduledStartTime);
-      const rawEnd = parseHM(t.scheduledEndTime);
-      if (rawStart == null || rawEnd == null) return null;
+      if (rawStart == null) return null;
+      // If only a start was captured, derive the end from the task's estimate.
+      let rawEnd = parseHM(t.scheduledEndTime);
+      if (rawEnd == null) rawEnd = rawStart + Math.max(5, t.estimated_minutes || 30) / 60;
       let start = rawStart;
       let end = rawEnd <= rawStart ? rawEnd + 24 : rawEnd;
       if (endH > 24 && start < startH) {
