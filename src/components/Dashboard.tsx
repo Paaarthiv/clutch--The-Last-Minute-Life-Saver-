@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAgent } from "../AgentContext";
-import { ScheduledBlock } from "../types";
-import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, X, Check, Zap, BatteryLow, ArrowRight, ImagePlus, Volume2 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { PrioritizedTask, ScheduledBlock } from "../types";
+import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, Check, Zap, BatteryLow, ArrowRight, ImagePlus, Volume2 } from "lucide-react";
+import { motion } from "motion/react";
 import { format } from "date-fns";
 import clsx from "clsx";
 
@@ -346,7 +346,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
   };
 
   return (
-    <div className="w-full xl:flex-1 xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-4 py-10">
+    <div className="w-full xl:flex-1 xl:min-w-[360px] xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-4 py-10">
       {/* Decorative task-pill cloud behind the command bar. */}
       <div className="absolute inset-x-0 top-10 bottom-0 pointer-events-none select-none opacity-70">
         {CLOUD_PILLS.map((p, i) => (
@@ -457,136 +457,15 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
   );
 }
 
-// The Priorities button + description — now sits above the Today's Plan box.
-function PrioritiesBar({ prioOpen, setPrioOpen, count }: { prioOpen: boolean; setPrioOpen: (v: boolean) => void; count: number }) {
-  return (
-    <div className="w-full shrink-0">
-      <button
-        onClick={() => setPrioOpen(!prioOpen)}
-        className="w-full glass-bar px-4 py-3 flex items-center justify-between hover:border-[#20808D]/40 transition-colors"
-      >
-        <div className="flex items-center gap-2.5">
-          <LayoutDashboard className="w-4 h-4 text-[#20808D]" />
-          <span className="text-sm font-semibold text-[#13343B]">Priorities</span>
-          {count > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{count}</span>}
-        </div>
-        <ChevronDown className={clsx("w-4 h-4 text-[#9AA7A9] transition-transform", prioOpen && "rotate-180")} />
-      </button>
-      <p className="text-[11px] text-[#9AA7A9] leading-relaxed mt-2 px-1">
-        Open your ranked tasks — Clutch sorts them <span className="font-semibold text-[#5B6B6E]">NOW · NEXT · LATER</span> and lets you <span className="font-semibold text-[#20808D]">break down</span> big ones into steps.
-      </p>
-    </div>
-  );
-}
-
-// The wide Priorities panel (modal), closes on click-away.
-function PrioritiesPanel({ prioOpen, setPrioOpen }: { prioOpen: boolean; setPrioOpen: (v: boolean) => void }) {
-  const { tasks, isThinking, executeAgentAction } = useAgent();
-  const categories = ["NOW", "NEXT", "LATER"] as const;
-  const hasTasks = tasks.some((t) => t.status === "idle");
-  const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
-
-  const reprioritize = () => {
-    if (isThinking || !hasTasks) return;
-    executeAgentAction(
-      "",
-      undefined,
-      "Re-evaluate ALL of my existing tasks together and re-prioritize them now by urgency and importance — assign each NOW, NEXT, or LATER with a fresh one-line reason. Do NOT create any new tasks."
-    );
-  };
-
-  return (
-    <AnimatePresence>
-      {prioOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setPrioOpen(false)} className="absolute inset-0 bg-[#13343B]/45" />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 10 }}
-            transition={{ type: "spring", stiffness: 300, damping: 28 }}
-            className="priority-modal-panel relative glass-card w-full max-w-xl h-[82vh] flex flex-col overflow-hidden"
-          >
-            <div className="p-5 border-b border-[#E6E3DC] flex items-start justify-between gap-4 shrink-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2.5">
-                  <LayoutDashboard className="w-5 h-5 text-[#20808D]" />
-                  <h2 className="font-display text-lg text-[#13343B]">Priorities</h2>
-                  {activeCount > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{activeCount}</span>}
-                </div>
-                <p className="text-[12px] text-[#5B6B6E] leading-relaxed mt-2">
-                  Clutch ranks every task <span className="font-semibold text-[#13343B]">NOW · NEXT · LATER</span>. Hover a 60m+ task to <span className="font-semibold text-[#20808D]">break it down</span> into steps, or tick it off as you go.
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {hasTasks && (
-                  <button onClick={reprioritize} disabled={isThinking} title="Re-evaluate and re-rank all tasks together" className="flex items-center gap-1.5 text-[11px] font-semibold text-[#20808D] hover:text-[#13565F] disabled:opacity-50 transition-colors px-2 py-1.5 rounded-lg hover:bg-[#20808D]/5">
-                    <RotateCcw className={clsx("w-3.5 h-3.5", isThinking && "animate-spin")} />
-                    <span className="hidden sm:inline">Re-prioritize</span>
-                  </button>
-                )}
-                <button onClick={() => setPrioOpen(false)} title="Close" className="w-8 h-8 rounded-lg flex items-center justify-center text-[#9AA7A9] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className="priority-scroll flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3">
-              {isThinking && (
-                <div className="space-y-3">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="rounded-2xl border border-[#E6E3DC] bg-white p-4 space-y-3">
-                      <div className="shimmer h-3 w-20" />
-                      <div className="shimmer h-4 w-2/3" />
-                      <div className="shimmer h-3 w-1/2" />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {categories.map((cat) => {
-                const catTasks = tasks.filter((t) => t.category === cat && t.status === "idle" && !t.parentId);
-                if (catTasks.length === 0) return null;
-                return (
-                  <div key={cat} className="space-y-3">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9AA7A9]">{cat}</div>
-                    {catTasks.map((t) => (<TaskCard key={t.id} task={t} allTasks={tasks} />))}
-                  </div>
-                );
-              })}
-              {tasks.length === 0 && !isThinking && (
-                <div className="text-center py-16 flex flex-col items-center justify-center">
-                  <LayoutDashboard className="w-10 h-10 text-[#13343B]/20 mb-3" />
-                  <p className="text-[#5B6B6E] text-sm">No priorities yet.</p>
-                  <p className="text-[#9AA7A9] text-xs mt-1">Brain-dump a few tasks and they'll be ranked here.</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-// The Today board: chat on the left; Priorities bar + plan in the middle; activity on the right.
+// The Today board: chat on the left, a single live plan in the middle, activity on the right.
 function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement> }) {
-  const { tasks } = useAgent();
-  const [prioOpen, setPrioOpen] = useState(false);
-  const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
-
-  useEffect(() => {
-    document.body.classList.toggle("priority-modal-open", prioOpen);
-    return () => document.body.classList.remove("priority-modal-open");
-  }, [prioOpen]);
-
   return (
-    <div className="flex-1 flex flex-col xl:flex-row gap-6 px-4 md:px-8 py-6 h-full overflow-y-auto xl:overflow-hidden custom-scrollbar">
+    <div className="flex-1 flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-6 px-4 md:px-8 py-6 h-full overflow-y-auto 2xl:overflow-hidden custom-scrollbar">
       <PrioritiesColumn inputRef={inputRef} />
-      <div className="w-full xl:w-[500px] xl:shrink-0 flex flex-col gap-3 min-h-0 xl:h-full">
-        <PrioritiesBar prioOpen={prioOpen} setPrioOpen={setPrioOpen} count={activeCount} />
+      <div className="w-full xl:flex-1 xl:min-w-[420px] 2xl:w-[560px] 2xl:flex-none flex flex-col min-h-0 xl:h-full">
         <TimelineColumn />
       </div>
       <AgentActivityFeed />
-      <PrioritiesPanel prioOpen={prioOpen} setPrioOpen={setPrioOpen} />
     </div>
   );
 }
@@ -729,11 +608,23 @@ function NowCard() {
 }
 
 function TimelineColumn() {
-  const { schedule, settings } = useAgent();
+  const { tasks, schedule, settings, markTaskStatus, archiveTask, executeAgentAction, isThinking } = useAgent();
 
   const [calState, setCalState] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [calMsg, setCalMsg] = useState("");
   const [calendarClientId, setCalendarClientId] = useState(() => FALLBACK_GCAL_CLIENT_ID || "");
+  const activeCount = tasks.filter((t) => t.status === "idle" && !t.parentId).length;
+  const taskById = new Map<string, PrioritizedTask>(tasks.map((task) => [task.id, task]));
+  const hasTasks = tasks.some((t) => t.status === "idle");
+
+  const reprioritize = () => {
+    if (isThinking || !hasTasks) return;
+    executeAgentAction(
+      "",
+      undefined,
+      "Re-evaluate ALL of my existing tasks together and re-prioritize them now by urgency and importance - assign each NOW, NEXT, or LATER with a fresh one-line reason. Do NOT create any new tasks."
+    );
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -768,24 +659,41 @@ function TimelineColumn() {
 
   return (
     <div className="w-full xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[420px] xl:min-h-0">
-      <div className="p-4 border-b border-[#E6E3DC] flex justify-between items-center gap-3 bg-black/[0.025] shrink-0 z-10">
-        <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] text-[#20808D] font-bold whitespace-nowrap">{schedule.length} Block(s)</span>
-          {calendarClientId && schedule.length > 0 && (
-            <button
-              onClick={syncCal}
-              disabled={calState === "syncing"}
-              title="Add today's plan to Google Calendar"
-              className={clsx(
-                "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-60",
-                calState === "error" ? "text-[#C2410C] border-[#C2410C]/30 hover:bg-[#C2410C]/5" : "text-[#20808D] border-[#20808D]/30 hover:bg-[#20808D]/5"
-              )}
-            >
-              <Calendar className={clsx("w-3.5 h-3.5", calState === "syncing" && "animate-pulse")} />
-              {calState === "syncing" ? "Syncing…" : calState === "done" ? `Added ${calMsg} ✓` : calState === "error" ? "Retry" : "Add to Calendar"}
-            </button>
-          )}
+      <div className="p-4 border-b border-[#E6E3DC] bg-black/[0.025] shrink-0 z-10">
+        <div className="flex justify-between items-start gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <Calendar className="w-4 h-4 text-[#20808D] shrink-0" />
+              <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
+              {activeCount > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{activeCount}</span>}
+            </div>
+            <p className="text-[11px] text-[#9AA7A9] leading-relaxed mt-2">
+              Timed by urgency: <span className="font-semibold text-[#5B6B6E]">NOW - NEXT - LATER</span>. Big blocks can break into smaller steps without losing their time slot.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+            {hasTasks && (
+              <button onClick={reprioritize} disabled={isThinking} title="Re-evaluate and re-rank all tasks together" className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg border border-[#20808D]/25 text-[#20808D] hover:bg-[#20808D]/5 disabled:opacity-50 transition-colors">
+                <RotateCcw className={clsx("w-3.5 h-3.5", isThinking && "animate-spin")} />
+                <span className="hidden sm:inline">Re-prioritize</span>
+              </button>
+            )}
+            <span className="text-[10px] text-[#20808D] font-bold whitespace-nowrap">{schedule.length} Block(s)</span>
+            {calendarClientId && schedule.length > 0 && (
+              <button
+                onClick={syncCal}
+                disabled={calState === "syncing"}
+                title="Add today's plan to Google Calendar"
+                className={clsx(
+                  "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-60",
+                  calState === "error" ? "text-[#C2410C] border-[#C2410C]/30 hover:bg-[#C2410C]/5" : "text-[#20808D] border-[#20808D]/30 hover:bg-[#20808D]/5"
+                )}
+              >
+                <Calendar className={clsx("w-3.5 h-3.5", calState === "syncing" && "animate-pulse")} />
+                {calState === "syncing" ? "Syncing…" : calState === "done" ? `Added ${calMsg} ✓` : calState === "error" ? "Retry" : "Add to Calendar"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -800,9 +708,14 @@ function TimelineColumn() {
         ) : (
           <>
             {blocks.map(({ b: block, idx, start, end }, i) => {
+              const task = taskById.get(block.taskId);
+              const subtasks = task ? tasks.filter((t) => t.parentId === task.id) : [];
               const isCurrent = windowNow >= start && windowNow < end;
               const isPast = windowNow >= end;
               const dur = (end - start) * 60;
+              const category = task?.category || "NEXT";
+              const catColor = category === "NOW" ? "#20808D" : category === "NEXT" ? "#2AA7B5" : "#93C3C7";
+              const isDone = task?.status === "done";
               return (
                 <div
                   key={block.taskId + idx}
@@ -820,14 +733,67 @@ function TimelineColumn() {
                   </div>
                   {/* Card */}
                   <div className={clsx(
-                    "flex-1 min-w-0 mb-2 rounded-xl border p-3",
+                    "group flex-1 min-w-0 mb-2 rounded-xl border p-3",
                     isCurrent ? "bg-[#20808D]/10 border-[#20808D]/35" : "bg-black/[0.02] border-[#E6E3DC]",
-                    isPast && "opacity-60"
+                    isPast && !isCurrent && "opacity-60"
                   )}>
-                    <div className={clsx("text-sm font-semibold leading-tight", isPast && "line-through")}>{block.title}</div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-widest tabular-nums" style={{ color: catColor }}>{category}</span>
+                          <LoadBadge load={task?.cognitiveLoad} />
+                          {isCurrent && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#20808D] animate-pulse" />Now</span>}
+                        </div>
+                        <div className={clsx("text-sm font-semibold leading-tight text-[#13343B]", (isDone || isPast) && "line-through")}>{task?.title || block.title}</div>
+                        {task?.reason && <div className="text-[11px] text-[#9AA7A9] mt-1 leading-snug">{task.reason}</div>}
+                      </div>
+                      {task && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => markTaskStatus(task.id, isDone ? "idle" : "done")}
+                            title={isDone ? "Mark as not done" : "Mark as done"}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#13343B]/40 hover:text-[#13343B] hover:bg-black/[0.04] transition-colors"
+                          >
+                            {isDone ? <CheckCircle2 className="w-[18px] h-[18px] text-[#34D399]" /> : <Circle className="w-[18px] h-[18px]" />}
+                          </button>
+                          <button
+                            onClick={() => archiveTask(task.id)}
+                            title="Archive task"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#13343B]/35 hover:text-[#20808D] hover:bg-[#20808D]/10 transition-colors"
+                          >
+                            <Archive className="w-[17px] h-[17px]" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {subtasks.length > 0 && (
+                      <div className="ml-1 space-y-2 mt-3 border-l px-3 py-1 border-[#E0DCD3]">
+                        {subtasks.map((st) => (
+                          <div key={st.id} className="flex items-center gap-2 group/sub">
+                            <button
+                              onClick={() => markTaskStatus(st.id, st.status === "done" ? "idle" : "done")}
+                              className="flex-shrink-0 text-[#13343B]/40 hover:text-[#13343B] transition-colors"
+                            >
+                              {st.status === "done" ? <CheckCircle2 className="w-3.5 h-3.5 text-[#34D399]" /> : <Circle className="w-3.5 h-3.5" />}
+                            </button>
+                            <span className={clsx("text-xs text-[#13343B]", st.status === "done" && "line-through opacity-50")}>{st.title}</span>
+                            <span className="text-[10px] text-[#9AA7A9] opacity-0 group-hover/sub:opacity-100 transition-opacity ml-auto">{st.estimated_minutes}m</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-2">
                       <span className="pill bg-black/[0.04] text-[#5B6B6E] normal-case tracking-normal">{fmtDur(dur)}</span>
-                      {isCurrent && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#20808D] animate-pulse" />Now</span>}
+                      {task?.estimated_minutes && <span className="pill bg-[#20808D]/10 text-[#20808D] normal-case tracking-normal">{task.estimated_minutes}m estimate</span>}
+                      {task && task.estimated_minutes >= 60 && task.status !== "done" && subtasks.length === 0 && (
+                        <button
+                          onClick={() => executeAgentAction(`Break down this large goal into smaller subtasks: "${task.title}". The parentTaskId IS: ${task.id}`)}
+                          disabled={isThinking}
+                          className="pill bg-[#20808D]/15 text-[#20808D] normal-case tracking-normal hover:bg-[#20808D]/20 disabled:opacity-50"
+                        >
+                          Break down
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

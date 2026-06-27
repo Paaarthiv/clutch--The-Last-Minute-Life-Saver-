@@ -269,6 +269,53 @@ function splitScheduleForBreakdown(
   };
 }
 
+function textIncludesExplicitTimeWindow(text?: string, actionTrigger?: string): boolean {
+  const raw = `${text || ""} ${actionTrigger || ""}`.toLowerCase();
+  if (!raw.trim()) return false;
+  const clock = String.raw`(?:[01]?\d|2[0-3])(?::[0-5]\d)?\s*(?:am|pm)?`;
+  const ampm = String.raw`(?:1[0-2]|0?\d)(?::[0-5]\d)?\s*(?:am|pm)`;
+  return new RegExp(`${clock}\\s*(?:-|to|until|through|till)\\s*${clock}`, "i").test(raw)
+    || new RegExp(`from\\s+${clock}\\s*(?:-|to|until|through|till)\\s*${clock}`, "i").test(raw)
+    || new RegExp(`\\b${ampm}\\s*(?:-|to|until|through|till)\\s*${ampm}\\b`, "i").test(raw);
+}
+
+function rangesOverlap(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
+  return a.start < b.end && a.end > b.start;
+}
+
+function removeConflictingNewTaskPins(
+  previousSchedule: ScheduledBlock[],
+  previousTasks: PrioritizedTask[],
+  nextTasks: PrioritizedTask[],
+  settings: Settings,
+  text?: string,
+  actionTrigger?: string,
+): PrioritizedTask[] {
+  if (textIncludesExplicitTimeWindow(text, actionTrigger)) return nextTasks;
+
+  const previousIds = new Set(previousTasks.map((task) => task.id));
+  const { start: windowStart, end: windowEnd } = planningWindow(settings);
+  const occupied = previousSchedule.map((block) => blockRange(block, windowStart, windowEnd));
+
+  return nextTasks.map((task) => {
+    if (previousIds.has(task.id) || !task.scheduledStartTime || !task.scheduledEndTime) return task;
+
+    const start = parseHM(task.scheduledStartTime);
+    const rawEnd = parseHM(task.scheduledEndTime);
+    if (start == null || rawEnd == null) return task;
+
+    let normalizedStart = start;
+    let normalizedEnd = rawEnd <= start ? rawEnd + 24 : rawEnd;
+    if (windowEnd > 24 && normalizedStart < windowStart) {
+      normalizedStart += 24;
+      normalizedEnd += 24;
+    }
+
+    const conflicts = occupied.some((range) => rangesOverlap({ start: normalizedStart, end: normalizedEnd }, range));
+    return conflicts ? { ...task, scheduledStartTime: undefined, scheduledEndTime: undefined } : task;
+  });
+}
+
 const AgentContext = createContext<AgentContextType | undefined>(undefined);
 
 export function AgentProvider({ children }: { children: ReactNode }) {
@@ -426,8 +473,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.tasks) {
-        const breakdownSchedule = splitScheduleForBreakdown(previousSchedule, previousTasks, data.tasks);
-        const nextTasks = breakdownSchedule?.tasks || data.tasks;
+        const cleanedTasks = removeConflictingNewTaskPins(previousSchedule, previousTasks, data.tasks, settings, text, actionTrigger);
+        const breakdownSchedule = splitScheduleForBreakdown(previousSchedule, previousTasks, cleanedTasks);
+        const nextTasks = breakdownSchedule?.tasks || cleanedTasks;
         setTasks(nextTasks);
         setSchedule(breakdownSchedule?.schedule || buildSchedule(nextTasks, settings));
       }
