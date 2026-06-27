@@ -55,11 +55,23 @@ function fmtHM(dec: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+function parseHM(hm?: string): number | null {
+  if (!hm || !/^\d{2}:\d{2}$/.test(hm)) return null;
+  const [h, m] = hm.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h + m / 60;
+}
+
 function planningWindow(settings: Settings): { start: number; end: number } {
   const start = Math.trunc(Math.max(0, Math.min(23, settings.workStart)));
   const rawEnd = Math.trunc(Math.max(0, Math.min(23, settings.workEnd)));
   const end = rawEnd === start ? start + 1 : rawEnd <= start ? rawEnd + 24 : rawEnd;
   return { start, end };
+}
+
+function scheduleSortValue(block: ScheduledBlock, windowStart = 0, windowEnd = 24): number {
+  const start = parseHM(block.startTime) ?? 0;
+  return windowEnd > 24 && start < windowStart ? start + 24 : start;
 }
 
 // Deterministic local scheduler: the Today's Plan is always derived from the prioritized tasks,
@@ -87,19 +99,115 @@ function buildSchedule(tasks: PrioritizedTask[], settings: Settings): ScheduledB
   const d = new Date();
   const nowDec = d.getHours() + d.getMinutes() / 60;
   const windowNow = endH > 24 && nowDec < startH ? nowDec + 24 : nowDec;
-  if (windowNow >= endH) return [];
+  const canScheduleFlexible = windowNow < endH;
   let cursor = Math.max(startH, Math.ceil(windowNow * 12) / 12); // round up to the next 5 minutes
 
   const blocks: ScheduledBlock[] = [];
-  for (const t of schedulable) {
+  const pinned = schedulable
+    .map((t) => {
+      const rawStart = parseHM(t.scheduledStartTime);
+      const rawEnd = parseHM(t.scheduledEndTime);
+      if (rawStart == null || rawEnd == null) return null;
+      let start = rawStart;
+      let end = rawEnd <= rawStart ? rawEnd + 24 : rawEnd;
+      if (endH > 24 && start < startH) {
+        start += 24;
+        end += 24;
+      }
+      return { task: t, start, end };
+    })
+    .filter(Boolean) as { task: PrioritizedTask; start: number; end: number }[];
+
+  for (const p of pinned) {
+    blocks.push({ taskId: p.task.id, title: p.task.title, startTime: fmtHM(p.start), endTime: fmtHM(p.end) });
+  }
+
+  const pinnedIds = new Set(pinned.map((p) => p.task.id));
+  const blockers = [...pinned].sort((a, b) => a.start - b.start || a.end - b.end);
+  let blockerIndex = 0;
+
+  for (const t of schedulable.filter((task) => !pinnedIds.has(task.id))) {
+    if (!canScheduleFlexible) break;
     if (cursor >= endH) break;
     const dur = Math.max(5, t.estimated_minutes || 30) / 60;
+
+    while (blockerIndex < blockers.length && blockers[blockerIndex].end <= cursor) blockerIndex++;
+    const nextBlocker = blockers[blockerIndex];
+    if (nextBlocker && cursor < nextBlocker.start && cursor + dur > nextBlocker.start) {
+      cursor = nextBlocker.end;
+      while (blockerIndex < blockers.length && blockers[blockerIndex].end <= cursor) blockerIndex++;
+    } else if (nextBlocker && cursor >= nextBlocker.start && cursor < nextBlocker.end) {
+      cursor = nextBlocker.end;
+      while (blockerIndex < blockers.length && blockers[blockerIndex].end <= cursor) blockerIndex++;
+    }
+
+    if (cursor >= endH) break;
     const end = Math.min(endH, cursor + dur);
     if (end <= cursor) break;
     blocks.push({ taskId: t.id, title: t.title, startTime: fmtHM(cursor), endTime: fmtHM(end) });
     cursor = end;
   }
-  return blocks;
+  return blocks.sort((a, b) => scheduleSortValue(a, startH, endH) - scheduleSortValue(b, startH, endH));
+}
+
+function splitScheduleForBreakdown(
+  previousSchedule: ScheduledBlock[],
+  previousTasks: PrioritizedTask[],
+  nextTasks: PrioritizedTask[],
+): { tasks: PrioritizedTask[]; schedule: ScheduledBlock[] } | null {
+  const previousIds = new Set(previousTasks.map((t) => t.id));
+  const newSubtasks = nextTasks.filter((t) => t.parentId && !previousIds.has(t.id));
+  if (!newSubtasks.length) return null;
+
+  let changed = false;
+  let updatedTasks = nextTasks;
+  let updatedSchedule = [...previousSchedule];
+  let sortWindowStart = 0;
+  let sortWindowEnd = 24;
+
+  for (const parentId of Array.from(new Set(newSubtasks.map((t) => t.parentId as string)))) {
+    const parentBlock = updatedSchedule.find((b) => b.taskId === parentId);
+    if (!parentBlock) continue;
+
+    const parentStart = parseHM(parentBlock.startTime);
+    const parentEndRaw = parseHM(parentBlock.endTime);
+    if (parentStart == null || parentEndRaw == null) continue;
+    const parentEnd = parentEndRaw <= parentStart ? parentEndRaw + 24 : parentEndRaw;
+    sortWindowStart = parentStart;
+    sortWindowEnd = parentEnd;
+    const parentMinutes = Math.max(5, Math.round((parentEnd - parentStart) * 60));
+    const subtasks = newSubtasks.filter((t) => t.parentId === parentId);
+    const totalEstimate = Math.max(1, subtasks.reduce((sum, t) => sum + Math.max(1, t.estimated_minutes || 1), 0));
+
+    let cursor = parentStart;
+    const subBlocks: ScheduledBlock[] = [];
+    const pinnedById = new Map<string, { start: string; end: string }>();
+    subtasks.forEach((task, index) => {
+      const isLast = index === subtasks.length - 1;
+      const minutes = isLast
+        ? Math.max(1, Math.round((parentEnd - cursor) * 60))
+        : Math.max(5, Math.round(parentMinutes * Math.max(1, task.estimated_minutes || 1) / totalEstimate));
+      const end = isLast ? parentEnd : Math.min(parentEnd, cursor + minutes / 60);
+      const startTime = fmtHM(cursor);
+      const endTime = fmtHM(end);
+      pinnedById.set(task.id, { start: startTime, end: endTime });
+      subBlocks.push({ taskId: task.id, title: task.title, startTime, endTime });
+      cursor = end;
+    });
+
+    updatedTasks = updatedTasks.map((task) => {
+      const pinned = pinnedById.get(task.id);
+      return pinned ? { ...task, scheduledStartTime: pinned.start, scheduledEndTime: pinned.end } : task;
+    });
+    updatedSchedule = updatedSchedule.filter((b) => b.taskId !== parentId).concat(subBlocks);
+    changed = true;
+  }
+
+  if (!changed) return null;
+  return {
+    tasks: updatedTasks,
+    schedule: updatedSchedule.sort((a, b) => scheduleSortValue(a, sortWindowStart, sortWindowEnd) - scheduleSortValue(b, sortWindowStart, sortWindowEnd)),
+  };
 }
 
 const AgentContext = createContext<AgentContextType | undefined>(undefined);
@@ -225,6 +333,8 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const executeAgentAction = async (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue"; image?: { mimeType: string; data: string } }) => {
     setIsThinking(true);
     try {
+      const previousTasks = tasks;
+      const previousSchedule = schedule;
       const currentContext = contextOverride || { tasks, schedule };
       const d = new Date();
       const nowStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -252,9 +362,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.tasks) {
-        setTasks(data.tasks);
-        // The plan is always a local derivation of the latest priorities, so it stays in sync.
-        setSchedule(buildSchedule(data.tasks, settings));
+        const breakdownSchedule = splitScheduleForBreakdown(previousSchedule, previousTasks, data.tasks);
+        const nextTasks = breakdownSchedule?.tasks || data.tasks;
+        setTasks(nextTasks);
+        setSchedule(breakdownSchedule?.schedule || buildSchedule(nextTasks, settings));
       }
       if (data.replan) {
         setReplanState(data.replan);

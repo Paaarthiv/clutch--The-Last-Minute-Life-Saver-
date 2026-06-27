@@ -110,6 +110,10 @@ button:disabled {
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
 }
+.timeline-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 92px;
+}
 
 .glass-bar {
   background: var(--color-canvas-card);

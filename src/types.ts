@@ -5,6 +5,8 @@ export interface Task {
   title: string;
   estimated_minutes: number;
   deadline?: string;
+  scheduledStartTime?: string;
+  scheduledEndTime?: string;
   importance: number; // 1-5
   cognitiveLoad?: CognitiveLoad;
   status: "idle" | "done" | "dropped" | "archived";

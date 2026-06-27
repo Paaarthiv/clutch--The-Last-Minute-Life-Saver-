@@ -40,6 +40,8 @@ const createTasksDeclaration: FunctionDeclaration = {
             title: { type: Type.STRING },
             estimated_minutes: { type: Type.NUMBER },
             deadline: { type: Type.STRING, description: "ISO string or human readable like 'Today 5pm'" },
+            scheduled_start_time: { type: Type.STRING, description: "Optional exact start time when the user specifies a fixed time window, in HH:mm 24h format. Example: '18:00'." },
+            scheduled_end_time: { type: Type.STRING, description: "Optional exact end time when the user specifies a fixed time window, in HH:mm 24h format. Example: '20:00'." },
             importance: { type: Type.NUMBER, description: "1-5 scale, 5 is most important" },
             cognitive_load: { type: Type.STRING, enum: ["deep", "light", "admin"], description: "Mental energy this task needs: 'deep' = hard focus (studying, writing, coding), 'light' = moderate, 'admin' = low-effort chores (emails, errands, calls)." },
           },
@@ -235,6 +237,36 @@ function toSafeString(value: unknown, maxLength: number): string {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function normalizeTime(value: unknown): string | undefined {
+  const raw = toSafeString(value, 40).toLowerCase();
+  if (!raw) return undefined;
+  const match = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!match) return undefined;
+  let h = Number(match[1]);
+  const m = Number(match[2] || 0);
+  const ap = match[3];
+  if (!Number.isFinite(h) || !Number.isFinite(m) || m < 0 || m > 59) return undefined;
+  if (ap === "pm" && h < 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  if (h < 0 || h > 23) return undefined;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function timeToMinutes(hm?: string): number | null {
+  if (!hm || !/^\d{2}:\d{2}$/.test(hm)) return null;
+  const [h, m] = hm.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+
+function minutesBetween(start?: string, end?: string): number | null {
+  const s = timeToMinutes(start);
+  const e0 = timeToMinutes(end);
+  if (s == null || e0 == null) return null;
+  const e = e0 <= s ? e0 + 24 * 60 : e0;
+  return Math.max(1, e - s);
+}
+
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -262,6 +294,8 @@ function normalizeContext(context: any) {
           title,
           estimated_minutes: clampNumber(task?.estimated_minutes, 30, 1, 1440),
           deadline: toSafeString(task?.deadline, 120) || undefined,
+          scheduledStartTime: normalizeTime(task?.scheduledStartTime || task?.scheduled_start_time),
+          scheduledEndTime: normalizeTime(task?.scheduledEndTime || task?.scheduled_end_time),
           importance: Math.trunc(clampNumber(task?.importance, 3, 1, 5)),
           cognitiveLoad: coerceLoad(task?.cognitiveLoad),
           status: ["idle", "done", "dropped", "archived"].includes(task?.status) ? task.status : "idle",
@@ -288,10 +322,15 @@ function coerceLoad(value: unknown): "deep" | "light" | "admin" {
 }
 
 function normalizeGeneratedTask(task: any) {
+  const scheduledStartTime = normalizeTime(task?.scheduled_start_time || task?.scheduledStartTime);
+  const scheduledEndTime = normalizeTime(task?.scheduled_end_time || task?.scheduledEndTime);
+  const scheduledMinutes = minutesBetween(scheduledStartTime, scheduledEndTime);
   return {
     title: toSafeString(task?.title, 180) || "Untitled task",
-    estimated_minutes: clampNumber(task?.estimated_minutes, 30, 1, 1440),
+    estimated_minutes: scheduledMinutes ?? clampNumber(task?.estimated_minutes, 30, 1, 1440),
     deadline: toSafeString(task?.deadline, 120) || undefined,
+    scheduledStartTime,
+    scheduledEndTime,
     importance: Math.trunc(clampNumber(task?.importance, 3, 1, 5)),
     cognitiveLoad: coerceLoad(task?.cognitive_load),
     id: crypto.randomUUID(),
@@ -349,6 +388,51 @@ function getBreakdownTarget(text: string, tasks: any[]) {
   }
 
   return null;
+}
+
+function wordsForMatch(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !["learn", "learning", "study", "task", "today", "from", "with"].includes(w));
+}
+
+function attachExplicitTimeWindows(text: string, tasks: any[]) {
+  if (!text || !tasks.length) return;
+  const rangeRe = /(?:from\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:to|until|till|-)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/gi;
+  const ranges = [...text.matchAll(rangeRe)];
+
+  for (const match of ranges) {
+    const start = normalizeTime(match[1]);
+    const end = normalizeTime(match[2]);
+    if (!start || !end) continue;
+
+    const before = text.slice(Math.max(0, match.index - 90), match.index).toLowerCase();
+    let best: any = null;
+    let bestScore = 0;
+    let bestDistance = Infinity;
+    for (const task of tasks) {
+      if (task.scheduledStartTime && task.scheduledEndTime) continue;
+      const positions = wordsForMatch(task.title)
+        .map((w) => before.lastIndexOf(w))
+        .filter((pos) => pos >= 0);
+      const score = positions.length;
+      const distance = positions.length ? before.length - Math.max(...positions) : Infinity;
+      if (score > bestScore || (score === bestScore && distance < bestDistance)) {
+        best = task;
+        bestScore = score;
+        bestDistance = distance;
+      }
+    }
+
+    if (best) {
+      best.scheduledStartTime = start;
+      best.scheduledEndTime = end;
+      const lockedMinutes = minutesBetween(start, end);
+      if (lockedMinutes) best.estimated_minutes = lockedMinutes;
+    }
+  }
 }
 
 function classifyAgentError(err: any): AgentErrorInfo {
@@ -503,6 +587,7 @@ async function startServer() {
       let systemInstruction = `You are Clutch, a premium autonomous AI productivity agent. You help the user plan their day, break down goals, and beat deadlines.
 You do NOT just generate text. You call tools to update the user's state directly.
 For EVERY task you create, set its cognitive_load: 'deep' for hard-focus work (studying, writing, coding, designing), 'admin' for low-effort chores (emails, errands, quick calls, payments), 'light' otherwise.
+If the user gives an exact time window for a task (example: "gym from 6pm to 8pm", "meeting 14:00-15:00"), put that task's scheduled_start_time and scheduled_end_time in HH:mm 24h format. Do not put those exact times on unrelated tasks.
 When the user asks to break down an existing task, you MUST call breakdown_goal with 3-6 concrete, ordered subtasks. Do not ask the user for subtasks. Use the exact parentTaskId if one is provided.
 When the user adds or changes tasks, in the SAME turn you MUST: (1) call create_tasks, then after you receive the created tasks with their ids, (2) call prioritize over ALL current tasks assigning each a category of NOW, NEXT, or LATER with a short one-line reason. The day's time-blocked plan is built automatically from your priorities (NOW first, then NEXT, then LATER), so you do NOT schedule times yourself — just get the categories and ordering right. The user's current local time is ${nowTime} and working hours are ${fmtH(startH)}–${fmtH(endH)}; factor that into urgency.
 Always use the EXACT task ids you were given. Only use replan when the user reports being late or drops a task.
@@ -599,6 +684,7 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
               const newTasksWithIds = (Array.isArray(args.tasks) ? args.tasks : [])
                 .slice(0, 20)
                 .map(normalizeGeneratedTask);
+              attachExplicitTimeWindows(safeText, newTasksWithIds);
               state.tasks.push(...newTasksWithIds);
               activityLog.push(`Created ${newTasksWithIds.length} new task(s).`);
               functionResponses.push({

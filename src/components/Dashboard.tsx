@@ -181,6 +181,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
             <span className="w-1 h-1 rounded-full bg-[#C2CACB]" />
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#9AA7A9]">{task.category}</span>
             <LoadBadge load={(task as any).cognitiveLoad} />
+            {task.scheduledStartTime && task.scheduledEndTime && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] truncate">{task.scheduledStartTime}-{task.scheduledEndTime}</span>}
             {task.deadline && <span className="text-[10px] font-bold uppercase tracking-widest text-[#20808D] truncate">· Due {task.deadline}</span>}
           </div>
           <div className={clsx("text-sm font-semibold leading-tight", isDone && "line-through")}>{task.title}</div>
@@ -296,11 +297,6 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
 
-  const addSuggestion = (s: string) => {
-    setInput((prev) => (prev.trim() ? `${prev.replace(/\s*,?\s*$/, "")}, ${s}` : s));
-    inputRef.current?.focus();
-  };
-
   const startRecording = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) { alert("Speech recognition is not supported in this browser."); return; }
@@ -340,36 +336,32 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
   };
 
   return (
-    <div className="w-full xl:flex-1 flex flex-col items-center gap-3 xl:h-full min-h-0 xl:py-4">
-      {/* Scattered "tap to add" task pills — pretty, messy cloud that fills the space */}
-      <div className="relative w-full flex-1 min-h-[260px] overflow-hidden">
-        <div className="absolute left-1/2 top-2 -translate-x-1/2 text-[11px] uppercase tracking-[0.18em] text-[#9AA7A9] font-semibold whitespace-nowrap">
-          Tap a task to add it
-        </div>
+    <div className="w-full xl:flex-1 xl:h-full min-h-[520px] relative flex flex-col items-center justify-start overflow-hidden px-4 pt-14">
+      {/* Decorative task-pill cloud behind the command bar. */}
+      <div className="absolute inset-x-0 top-10 bottom-0 pointer-events-none select-none opacity-70">
         {CLOUD_PILLS.map((p, i) => (
           <div key={i} className="absolute" style={{ top: p.top, left: p.left, transform: "translate(-50%, -50%)" }}>
-            <button
-              type="button"
-              onClick={() => addSuggestion(p.label)}
-              title={`Add "${p.label}" to your brain-dump`}
+            <div
+              aria-hidden="true"
               className={clsx(
-                "pill-float inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-medium whitespace-nowrap cursor-pointer transition-[box-shadow,border-color] hover:shadow-[0_10px_28px_rgba(19,52,59,0.16)]",
+                "pill-float inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-medium whitespace-nowrap border backdrop-blur-sm",
                 p.accent
-                  ? "bg-[#20808D] text-white shadow-[0_8px_20px_rgba(32,128,141,0.30)] hover:bg-[#13565F]"
-                  : "bg-white text-[#13343B] border border-[#E6E3DC] shadow-[0_5px_16px_rgba(19,52,59,0.08)] hover:border-[#20808D]/50"
+                  ? "bg-[#20808D]/15 text-[#13565F] border-[#20808D]/20 shadow-[0_8px_26px_rgba(32,128,141,0.12)]"
+                  : "bg-white/55 text-[#5B6B6E] border-white/60 shadow-[0_5px_18px_rgba(19,52,59,0.06)]"
               )}
               style={{ fontSize: p.size, ["--rot" as any]: `${p.rot}deg`, ["--dur" as any]: `${p.dur}s`, ["--delay" as any]: `${p.delay}s` }}
             >
-              <Plus className={clsx("shrink-0", p.accent ? "text-white/80" : "text-[#20808D]")} style={{ width: p.size * 0.8, height: p.size * 0.8 }} />
+              <Plus className="shrink-0 text-[#20808D]/55" style={{ width: p.size * 0.8, height: p.size * 0.8 }} />
               {p.label}
-            </button>
+            </div>
           </div>
         ))}
       </div>
 
+      <div className="relative z-10 w-full max-w-[560px] space-y-3">
       {/* Chat input */}
-      <form onSubmit={handleSubmit} className="capture-glow w-full max-w-[480px] shrink-0">
-        <div className="glass-bar p-3 flex items-center gap-3 w-full">
+      <form onSubmit={handleSubmit} className="capture-glow w-full">
+        <div className="glass-bar p-3 flex items-center gap-3 w-full shadow-[0_18px_44px_rgba(19,52,59,0.10)]">
           <input ref={imgInputRef} type="file" accept="image/*" capture="environment" onChange={onImagePick} className="hidden" />
           <button type="button" onClick={() => imgInputRef.current?.click()} disabled={isThinking} title="Snap or upload a photo of your to-do list" className="shrink-0 text-[#5B6B6E] hover:text-[#20808D] transition-colors disabled:opacity-40">
             <ImagePlus className="w-5 h-5" />
@@ -400,7 +392,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
 
       {/* Clutch Mode + low-energy quick actions */}
       {hasTasks && (
-        <div className="w-full max-w-[480px] shrink-0 flex gap-2">
+        <div className="w-full flex gap-2">
           <div className="relative flex-1">
             <button
               onClick={runRescue}
@@ -420,7 +412,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
             <button
               onClick={lowEnergy}
               disabled={isThinking}
-              className="flex items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#13565F] bg-white border border-[#E6E3DC] hover:border-[#20808D]/50 active:scale-[0.98] transition disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#13565F] bg-white/90 border border-[#E6E3DC] hover:border-[#20808D]/50 active:scale-[0.98] transition disabled:opacity-50"
             >
               <BatteryLow className="w-4 h-4 text-[#20808D]" /> <span className="hidden sm:inline">I'm wiped</span>
             </button>
@@ -433,6 +425,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLInputEle
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -786,7 +779,7 @@ function TimelineColumn() {
               return (
                 <div
                   key={block.taskId + idx}
-                  className="flex gap-3"
+                  className="timeline-row flex gap-3"
                 >
                   {/* Time gutter */}
                   <div className="w-16 shrink-0 text-right pt-2.5">
@@ -800,7 +793,7 @@ function TimelineColumn() {
                   </div>
                   {/* Card */}
                   <div className={clsx(
-                    "flex-1 min-w-0 mb-2 rounded-xl border p-3 transition-colors",
+                    "flex-1 min-w-0 mb-2 rounded-xl border p-3",
                     isCurrent ? "bg-[#20808D]/10 border-[#20808D]/35" : "bg-black/[0.02] border-[#E6E3DC]",
                     isPast && "opacity-60"
                   )}>
@@ -1624,7 +1617,12 @@ function CalendarView() {
     d.setDate(startOfWeek.getDate() + i);
     return d;
   });
-  const { start: startH, end: endH } = displayWindow(settings);
+  let { start: startH, end: endH } = displayWindow(settings);
+  for (const block of schedule) {
+    const { start, end } = blockTimes(block, startH, endH);
+    startH = Math.min(startH, Math.floor(start));
+    endH = Math.max(endH, Math.ceil(end));
+  }
   const hours = Array.from({ length: Math.max(1, Math.ceil(endH - startH)) }, (_, i) => startH + i);
   const hourLabel = (h: number) => {
     const normalized = ((h % 24) + 24) % 24;
