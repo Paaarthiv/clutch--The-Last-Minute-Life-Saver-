@@ -209,7 +209,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     setActivityFeed((prev) => [
       { id: Date.now().toString() + Math.random(), timestamp: Date.now(), description: desc },
       ...prev
-    ]);
+    ].slice(0, 100));
   };
 
   const executeAgentAction = async (text: string, contextOverride?: any, actionTrigger?: string, opts?: { mode?: "rescue"; image?: { mimeType: string; data: string } }) => {
@@ -262,7 +262,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
               description: desc
             });
           });
-          return updated;
+          return updated.slice(0, 100);
         });
       }
     } catch (e) {
@@ -339,24 +339,31 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   };
 
   const archiveTask = (id: string) => {
-    setTasks((prev) => prev.map((t) => (
-      t.id === id || (t as any).parentId === id ? { ...t, status: "archived" } : t
-    )));
-    setSchedule((prev) => prev.filter((block) => block.taskId !== id));
+    const affectedIds = new Set(tasks.filter((t) => t.id === id || (t as any).parentId === id).map((t) => t.id));
+    const next = tasks.map((t) => (
+      affectedIds.has(t.id) ? { ...t, status: "archived" as const } : t
+    ));
+    setTasks(next);
+    setSchedule((prev) => prev.filter((block) => !affectedIds.has(block.taskId)));
     addActivity("Archived a task.");
   };
 
   // Restore a done/dropped task back to active (local only — no Gemini).
   const restoreTask = (id: string) => {
-    setTasks((prev) => prev.map((t) => (
-      t.id === id || (t as any).parentId === id ? { ...t, status: "idle" } : t
-    )));
+    const next = tasks.map((t) => (
+      t.id === id || (t as any).parentId === id ? { ...t, status: "idle" as const } : t
+    ));
+    setTasks(next);
+    setSchedule(buildSchedule(next, settings));
     addActivity("Restored a task.");
   };
 
   // Permanently delete a task and any of its subtasks (local only).
   const deleteTask = (id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id && (t as any).parentId !== id));
+    const affectedIds = new Set(tasks.filter((t) => t.id === id || (t as any).parentId === id).map((t) => t.id));
+    const next = tasks.filter((t) => !affectedIds.has(t.id));
+    setTasks(next);
+    setSchedule((prev) => prev.filter((block) => !affectedIds.has(block.taskId)));
   };
 
   const clearAllData = () => {

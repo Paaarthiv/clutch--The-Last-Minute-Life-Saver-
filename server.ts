@@ -182,6 +182,9 @@ const MAX_CONTEXT_TASKS = Number(process.env.MAX_CONTEXT_TASKS) || 80;
 const MAX_CONTEXT_SCHEDULE_BLOCKS = Number(process.env.MAX_CONTEXT_SCHEDULE_BLOCKS) || 120;
 const AGENT_RATE_LIMIT_WINDOW_MS = 60_000;
 const AGENT_RATE_LIMIT_MAX = Number(process.env.AGENT_RATE_LIMIT_PER_MINUTE) || 8;
+const TTS_RATE_LIMIT_MAX = Number(process.env.TTS_RATE_LIMIT_PER_MINUTE) || 12;
+const STATE_SAVE_RATE_LIMIT_MAX = Number(process.env.STATE_SAVE_RATE_LIMIT_PER_MINUTE) || 20;
+const STATE_LOAD_RATE_LIMIT_MAX = Number(process.env.STATE_LOAD_RATE_LIMIT_PER_MINUTE) || 40;
 
 type AgentErrorInfo = {
   status: number;
@@ -194,7 +197,39 @@ type RateLimitBucket = {
   count: number;
 };
 
-const rateLimitBuckets = new Map<string, RateLimitBucket>();
+const rateLimitBuckets = new Map<string, Map<string, RateLimitBucket>>();
+
+function createRateLimiter(routeKey: string, maxRequests: number, windowMs = 60_000): express.RequestHandler {
+  const buckets = new Map<string, RateLimitBucket>();
+  rateLimitBuckets.set(routeKey, buckets);
+
+  return (req, res, next) => {
+    const now = Date.now();
+    const clientId = req.ip || req.socket.remoteAddress || "unknown";
+    const bucket = buckets.get(clientId);
+
+    if (!bucket || bucket.resetAt <= now) {
+      buckets.set(clientId, { count: 1, resetAt: now + windowMs });
+      next();
+      return;
+    }
+
+    bucket.count += 1;
+    if (bucket.count > maxRequests) {
+      res.setHeader("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000)));
+      res.status(429).json({ error: "Too many requests. Please wait a moment.", code: "LOCAL_RATE_LIMIT" });
+      return;
+    }
+
+    if (buckets.size > 10000) {
+      for (const [key, value] of buckets) {
+        if (value.resetAt <= now) buckets.delete(key);
+      }
+    }
+
+    next();
+  };
+}
 
 function toSafeString(value: unknown, maxLength: number): string {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -399,32 +434,10 @@ async function startServer() {
     next();
   });
 
-  app.use("/api/agent", (req, res, next) => {
-    const now = Date.now();
-    const clientId = req.ip || req.socket.remoteAddress || "unknown";
-    const bucket = rateLimitBuckets.get(clientId);
-
-    if (!bucket || bucket.resetAt <= now) {
-      rateLimitBuckets.set(clientId, { count: 1, resetAt: now + AGENT_RATE_LIMIT_WINDOW_MS });
-      next();
-      return;
-    }
-
-    bucket.count += 1;
-    if (bucket.count > AGENT_RATE_LIMIT_MAX) {
-      res.setHeader("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000)));
-      res.status(429).json({ error: "Too many planning requests. Please wait a moment.", code: "LOCAL_RATE_LIMIT" });
-      return;
-    }
-
-    if (rateLimitBuckets.size > 10000) {
-      for (const [key, value] of rateLimitBuckets) {
-        if (value.resetAt <= now) rateLimitBuckets.delete(key);
-      }
-    }
-
-    next();
-  });
+  app.use("/api/agent", createRateLimiter("agent", AGENT_RATE_LIMIT_MAX, AGENT_RATE_LIMIT_WINDOW_MS));
+  app.use("/api/tts", createRateLimiter("tts", TTS_RATE_LIMIT_MAX));
+  app.use("/api/state/save", createRateLimiter("state-save", STATE_SAVE_RATE_LIMIT_MAX));
+  app.use("/api/state/load", createRateLimiter("state-load", STATE_LOAD_RATE_LIMIT_MAX));
 
   // Agent Endpoint
   app.post("/api/agent", async (req, res) => {
@@ -780,6 +793,7 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
       const client = await getFsClient();
       if (!client) { res.status(503).json({ error: "Cloud storage unavailable.", code: "FS_UNAVAILABLE" }); return; }
       await client.collection("clutch_states").doc(clientId).set({ state: json, updatedAt: Date.now() });
+      res.setHeader("Cache-Control", "no-store");
       res.json({ ok: true });
     } catch (e: any) {
       console.error("[Clutch] /api/state/save error:", e?.message);
@@ -794,6 +808,7 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
       const client = await getFsClient();
       if (!client) { res.status(503).json({ error: "Cloud storage unavailable.", code: "FS_UNAVAILABLE" }); return; }
       const snap = await client.collection("clutch_states").doc(clientId).get();
+      res.setHeader("Cache-Control", "no-store");
       if (!snap.exists) { res.json({ state: null }); return; }
       let state: any = null;
       try { state = JSON.parse(snap.data().state); } catch {}
