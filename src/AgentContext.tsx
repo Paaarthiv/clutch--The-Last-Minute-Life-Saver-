@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from "react";
 import { PrioritizedTask, ScheduledBlock, AgentAction, ReplanState, RescueState } from "./types";
 
 export interface Settings {
@@ -155,6 +155,55 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try { localStorage.setItem("clutch_activity", JSON.stringify(activityFeed)); } catch (e) {}
   }, [activityFeed]);
+
+  // ----- Firestore cloud sync (additive mirror; localStorage stays the live store) -----
+  const clientId = useMemo(() => {
+    try {
+      let id = localStorage.getItem("clutch_client_id");
+      if (!id) {
+        id = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `c${Date.now()}${Math.random().toString(36).slice(2)}`;
+        localStorage.setItem("clutch_client_id", id);
+      }
+      return id;
+    } catch { return "anon-client-0"; }
+  }, []);
+  const hydratedRef = useRef(false);
+
+  // On first load, if there's nothing local, restore the snapshot from Firestore.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (tasks.length === 0) {
+          const res = await fetch(`/api/state/load?clientId=${encodeURIComponent(clientId)}`);
+          if (res.ok) {
+            const { state } = await res.json();
+            if (!cancelled && state && typeof state === "object") {
+              if (Array.isArray(state.tasks)) setTasks(state.tasks);
+              if (Array.isArray(state.schedule)) setSchedule(state.schedule);
+              if (Array.isArray(state.activityFeed)) setActivityFeed(state.activityFeed);
+              if (state.settings) setSettings((p) => ({ ...p, ...state.settings }));
+            }
+          }
+        }
+      } catch { /* offline / not configured — stay on localStorage */ }
+      finally { if (!cancelled) hydratedRef.current = true; }
+    })();
+    return () => { cancelled = true; };
+  }, []); // mount only
+
+  // Mirror state to Firestore (debounced), once the initial restore has been attempted.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const t = setTimeout(() => {
+      fetch("/api/state/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, state: { tasks, schedule, settings, activityFeed } }),
+      }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [tasks, schedule, settings, activityFeed, clientId]);
 
   const addActivity = (desc: string) => {
     setActivityFeed((prev) => [

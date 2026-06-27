@@ -53,6 +53,53 @@ async function speakText(text: string) {
   } catch {}
 }
 
+// Google Calendar sync via Google Identity Services (client-side token flow — no server tokens).
+const GCAL_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+
+function gcalGetToken(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const g = (window as any).google;
+    if (!GCAL_CLIENT_ID) { reject(new Error("Calendar isn't configured.")); return; }
+    if (!g?.accounts?.oauth2) { reject(new Error("Google sign-in is still loading — try again in a moment.")); return; }
+    const client = g.accounts.oauth2.initTokenClient({
+      client_id: GCAL_CLIENT_ID,
+      scope: GCAL_SCOPE,
+      callback: (resp: any) => (resp?.access_token ? resolve(resp.access_token) : reject(new Error("Calendar access was not granted."))),
+      error_callback: (err: any) => reject(new Error(err?.message || "Calendar sign-in was cancelled.")),
+    });
+    client.requestAccessToken();
+  });
+}
+
+async function addBlocksToCalendar(blocks: ScheduledBlock[]): Promise<number> {
+  const token = await gcalGetToken();
+  const now = new Date();
+  const y = now.getFullYear(), mo = now.getMonth() + 1, d = now.getDate();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const local = (hm: string) => { const [h, mi] = hm.split(":"); return `${y}-${pad(mo)}-${pad(d)}T${pad(+h)}:${pad(+mi)}:00`; };
+  let ok = 0;
+  for (const b of blocks) {
+    const event = {
+      summary: b.title,
+      description: "Planned by Clutch",
+      colorId: "7",
+      start: { dateTime: local(b.startTime), timeZone: tz },
+      end: { dateTime: local(b.endTime), timeZone: tz },
+    };
+    try {
+      const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(event),
+      });
+      if (res.ok) ok++;
+    } catch { /* skip failed event */ }
+  }
+  return ok;
+}
+
 // A small "!" badge that reveals a detailed feature explanation on hover/focus (or tap).
 function InfoHint({ title, tone, children }: { title: string; tone: "onDark" | "onLight"; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -629,6 +676,22 @@ function NowCard() {
 function TimelineColumn() {
   const { schedule } = useAgent();
 
+  const [calState, setCalState] = useState<"idle" | "syncing" | "done" | "error">("idle");
+  const [calMsg, setCalMsg] = useState("");
+  const syncCal = async () => {
+    if (!schedule.length || calState === "syncing") return;
+    setCalState("syncing");
+    try {
+      const n = await addBlocksToCalendar(schedule);
+      setCalMsg(String(n));
+      setCalState("done");
+      setTimeout(() => setCalState("idle"), 4000);
+    } catch {
+      setCalState("error");
+      setTimeout(() => setCalState("idle"), 5000);
+    }
+  };
+
   const blocks = schedule
     .map((b, idx) => ({ b, idx, start: parseTimeStr(b.startTime), end: Math.max(parseTimeStr(b.startTime) + 0.05, parseTimeStr(b.endTime)) }))
     .sort((a, z) => a.start - z.start || a.end - z.end);
@@ -638,9 +701,25 @@ function TimelineColumn() {
 
   return (
     <div className="w-full xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[420px] xl:min-h-0">
-      <div className="p-4 border-b border-[#E6E3DC] flex justify-between items-center bg-black/[0.025] shrink-0 z-10">
+      <div className="p-4 border-b border-[#E6E3DC] flex justify-between items-center gap-3 bg-black/[0.025] shrink-0 z-10">
         <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
-        <span className="text-[10px] text-[#20808D] font-bold">{schedule.length} Block(s) Scheduled</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-[#20808D] font-bold whitespace-nowrap">{schedule.length} Block(s)</span>
+          {GCAL_CLIENT_ID && schedule.length > 0 && (
+            <button
+              onClick={syncCal}
+              disabled={calState === "syncing"}
+              title="Add today's plan to Google Calendar"
+              className={clsx(
+                "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-60",
+                calState === "error" ? "text-[#C2410C] border-[#C2410C]/30 hover:bg-[#C2410C]/5" : "text-[#20808D] border-[#20808D]/30 hover:bg-[#20808D]/5"
+              )}
+            >
+              <Calendar className={clsx("w-3.5 h-3.5", calState === "syncing" && "animate-pulse")} />
+              {calState === "syncing" ? "Syncing…" : calState === "done" ? `Added ${calMsg} ✓` : calState === "error" ? "Retry" : "Add to Calendar"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="timeline-scroll flex-1 overflow-y-auto w-full custom-scrollbar p-4">

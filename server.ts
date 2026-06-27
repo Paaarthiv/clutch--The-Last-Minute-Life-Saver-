@@ -750,6 +750,60 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
     }
   });
 
+  // Firestore-backed cloud sync. Lazily initialised; if unavailable the app just keeps using
+  // localStorage (these endpoints are an additive mirror, not the source of truth).
+  let fsClient: any = null;
+  let fsTried = false;
+  const getFsClient = async () => {
+    if (fsTried) return fsClient;
+    fsTried = true;
+    try {
+      const mod: any = await import("@google-cloud/firestore");
+      fsClient = new mod.Firestore();
+    } catch (e: any) {
+      console.warn("[Clutch] Firestore unavailable:", e?.message);
+      fsClient = null;
+    }
+    return fsClient;
+  };
+  const isValidClientId = (id: any): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(id);
+
+  app.post("/api/state/save", async (req, res) => {
+    try {
+      const { clientId, state } = req.body || {};
+      if (!isValidClientId(clientId) || !state || typeof state !== "object") {
+        res.status(400).json({ error: "Bad request.", code: "BAD_REQUEST" });
+        return;
+      }
+      const json = JSON.stringify(state);
+      if (json.length > 800_000) { res.status(413).json({ error: "State too large.", code: "TOO_LARGE" }); return; }
+      const client = await getFsClient();
+      if (!client) { res.status(503).json({ error: "Cloud storage unavailable.", code: "FS_UNAVAILABLE" }); return; }
+      await client.collection("clutch_states").doc(clientId).set({ state: json, updatedAt: Date.now() });
+      res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[Clutch] /api/state/save error:", e?.message);
+      res.status(502).json({ error: "Save failed.", code: "FS_SAVE_FAILED" });
+    }
+  });
+
+  app.get("/api/state/load", async (req, res) => {
+    try {
+      const clientId = req.query?.clientId;
+      if (!isValidClientId(clientId)) { res.status(400).json({ error: "Bad request.", code: "BAD_REQUEST" }); return; }
+      const client = await getFsClient();
+      if (!client) { res.status(503).json({ error: "Cloud storage unavailable.", code: "FS_UNAVAILABLE" }); return; }
+      const snap = await client.collection("clutch_states").doc(clientId).get();
+      if (!snap.exists) { res.json({ state: null }); return; }
+      let state: any = null;
+      try { state = JSON.parse(snap.data().state); } catch {}
+      res.json({ state });
+    } catch (e: any) {
+      console.error("[Clutch] /api/state/load error:", e?.message);
+      res.status(502).json({ error: "Load failed.", code: "FS_LOAD_FAILED" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
