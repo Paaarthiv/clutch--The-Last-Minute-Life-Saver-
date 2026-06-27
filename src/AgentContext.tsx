@@ -74,6 +74,65 @@ function scheduleSortValue(block: ScheduledBlock, windowStart = 0, windowEnd = 2
   return windowEnd > 24 && start < windowStart ? start + 24 : start;
 }
 
+function blockRange(block: ScheduledBlock, windowStart = 0, windowEnd = 24) {
+  let start = parseHM(block.startTime) ?? 0;
+  let end = parseHM(block.endTime) ?? start + 0.5;
+  if (end <= start) end += 24;
+  if (windowEnd > 24 && start < windowStart) {
+    start += 24;
+    end += 24;
+  }
+  return { start, end: Math.max(start + 5 / 60, end) };
+}
+
+function deconflictSchedule(
+  schedule: ScheduledBlock[],
+  tasks: PrioritizedTask[],
+  windowStart = 0,
+  windowEnd = 24,
+): ScheduledBlock[] {
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const blocks = schedule
+    .map((block, index) => {
+      const range = blockRange(block, windowStart, windowEnd);
+      const task = taskById.get(block.taskId);
+      const fixed = Boolean(task?.scheduledStartTime && task?.scheduledEndTime);
+      return { block, index, fixed, duration: range.end - range.start, ...range };
+    })
+    .sort((a, b) => Number(b.fixed) - Number(a.fixed) || a.start - b.start || a.index - b.index);
+
+  const placed: { start: number; end: number }[] = [];
+  const resolved = blocks.map((item) => {
+    if (item.fixed) {
+      placed.push({ start: item.start, end: item.end });
+      return { sort: item.start, block: item.block };
+    }
+
+    let start = item.start;
+    let moved = true;
+    while (moved) {
+      moved = false;
+      for (const taken of placed.sort((a, b) => a.start - b.start)) {
+        const end = start + item.duration;
+        if (start < taken.end && end > taken.start) {
+          start = taken.end;
+          moved = true;
+        }
+      }
+    }
+    const end = start + item.duration;
+    placed.push({ start, end });
+    return {
+      sort: start,
+      block: { ...item.block, startTime: fmtHM(start), endTime: fmtHM(end) },
+    };
+  });
+
+  return resolved
+    .sort((a, b) => a.sort - b.sort)
+    .map((item) => item.block);
+}
+
 // Deterministic local scheduler: the Today's Plan is always derived from the prioritized tasks,
 // so it re-syncs the instant priorities change — no Gemini call needed. Orders NOW → NEXT → LATER,
 // then by importance, then deep-focus first (light energy bias), and packs from the current time.
@@ -147,7 +206,7 @@ function buildSchedule(tasks: PrioritizedTask[], settings: Settings): ScheduledB
     blocks.push({ taskId: t.id, title: t.title, startTime: fmtHM(cursor), endTime: fmtHM(end) });
     cursor = end;
   }
-  return blocks.sort((a, b) => scheduleSortValue(a, startH, endH) - scheduleSortValue(b, startH, endH));
+  return deconflictSchedule(blocks, schedulable, startH, endH);
 }
 
 function splitScheduleForBreakdown(
@@ -206,7 +265,7 @@ function splitScheduleForBreakdown(
   if (!changed) return null;
   return {
     tasks: updatedTasks,
-    schedule: updatedSchedule.sort((a, b) => scheduleSortValue(a, sortWindowStart, sortWindowEnd) - scheduleSortValue(b, sortWindowStart, sortWindowEnd)),
+    schedule: deconflictSchedule(updatedSchedule, updatedTasks, sortWindowStart, sortWindowEnd),
   };
 }
 
