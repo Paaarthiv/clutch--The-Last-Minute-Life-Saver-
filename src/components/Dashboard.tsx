@@ -239,18 +239,18 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks }) => {
 // centre in units of its radius; rx/ry size each pill's repel field against the dots.
 // Scattered "tap-to-add" task pills. Positions are percentages of the cloud area (centre points),
 // so they spread across whatever space is available without scrolling. A couple are teal-accented.
-type CloudPill = { label: string; top: string; left: string; size: number; accent?: boolean; rot: number; dur: number; delay: number };
+type CloudPill = { label: string; top: string; left: string; size: number; accent?: boolean; rot: number; dur: number; delay: number; wx: number; wy: number };
 const CLOUD_PILLS: CloudPill[] = [
-  { label: "Exam prep",    top: "14%", left: "32%", size: 17, accent: true,  rot: -4, dur: 5.5, delay: 0.0 },
-  { label: "Gym",          top: "11%", left: "70%", size: 14, rot: 5,  dur: 6.0, delay: 0.6 },
-  { label: "Dentist",      top: "30%", left: "18%", size: 13, rot: 3,  dur: 6.6, delay: 0.3 },
-  { label: "Reply emails", top: "34%", left: "54%", size: 15, rot: -2, dur: 5.0, delay: 1.1 },
-  { label: "Slide deck",   top: "48%", left: "76%", size: 14, rot: -5, dur: 5.8, delay: 0.9 },
-  { label: "Groceries",    top: "52%", left: "30%", size: 13, rot: 2,  dur: 6.2, delay: 1.4 },
-  { label: "Workout",      top: "66%", left: "58%", size: 16, accent: true,  rot: -3, dur: 5.3, delay: 0.2 },
-  { label: "Call mom",     top: "64%", left: "20%", size: 13, rot: 4,  dur: 6.8, delay: 1.7 },
-  { label: "Read 30 min",  top: "82%", left: "42%", size: 14, rot: -2, dur: 5.6, delay: 0.5 },
-  { label: "Pay bills",    top: "84%", left: "72%", size: 13, rot: 3,  dur: 6.1, delay: 1.2 },
+  { label: "Exam prep",    top: "18%", left: "32%", size: 17, accent: true,  rot: -4, dur: 18, delay: 0.0, wx: 54,  wy: 30 },
+  { label: "Gym",          top: "17%", left: "70%", size: 14, rot: 5,  dur: 20, delay: 1.6, wx: -46, wy: 38 },
+  { label: "Dentist",      top: "34%", left: "18%", size: 13, rot: 3,  dur: 22, delay: 0.8, wx: 42,  wy: -26 },
+  { label: "Reply emails", top: "37%", left: "54%", size: 15, rot: -2, dur: 19, delay: 2.2, wx: -58, wy: 34 },
+  { label: "Slide deck",   top: "50%", left: "76%", size: 14, rot: -5, dur: 21, delay: 1.4, wx: -50, wy: -34 },
+  { label: "Groceries",    top: "55%", left: "30%", size: 13, rot: 2,  dur: 23, delay: 2.8, wx: 48,  wy: 36 },
+  { label: "Workout",      top: "68%", left: "58%", size: 16, accent: true,  rot: -3, dur: 20, delay: 0.5, wx: 54,  wy: -44 },
+  { label: "Call mom",     top: "68%", left: "20%", size: 13, rot: 4,  dur: 24, delay: 3.2, wx: 46,  wy: -38 },
+  { label: "Read 30 min",  top: "83%", left: "42%", size: 14, rot: -2, dur: 21, delay: 1.0, wx: -42, wy: -48 },
+  { label: "Pay bills",    top: "84%", left: "72%", size: 13, rot: 3,  dur: 22, delay: 2.4, wx: -52, wy: -34 },
 ];
 
 // Downscale + JPEG-compress a picked image so a phone photo fits comfortably in one request.
@@ -346,11 +346,22 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
   };
 
   return (
-    <div className="w-full xl:flex-1 xl:h-full min-h-[520px] relative flex flex-col items-center justify-start overflow-hidden px-4 pt-14">
+    <div className="w-full xl:flex-1 xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-4 py-10">
       {/* Decorative task-pill cloud behind the command bar. */}
       <div className="absolute inset-x-0 top-10 bottom-0 pointer-events-none select-none opacity-70">
         {CLOUD_PILLS.map((p, i) => (
-          <div key={i} className="absolute" style={{ top: p.top, left: p.left, transform: "translate(-50%, -50%)" }}>
+          <div
+            key={i}
+            className="pill-wander absolute"
+            style={{
+              top: p.top,
+              left: p.left,
+              ["--wander-x" as any]: `${p.wx}px`,
+              ["--wander-y" as any]: `${p.wy}px`,
+              ["--wander-dur" as any]: `${p.dur}s`,
+              ["--wander-delay" as any]: `${p.delay}s`,
+            }}
+          >
             <div
               aria-hidden="true"
               className={clsx(
@@ -359,7 +370,7 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
                   ? "bg-[#20808D]/15 text-[#13565F] border-[#20808D]/20 shadow-[0_8px_26px_rgba(32,128,141,0.12)]"
                   : "bg-white/55 text-[#5B6B6E] border-white/60 shadow-[0_5px_18px_rgba(19,52,59,0.06)]"
               )}
-              style={{ fontSize: p.size, ["--rot" as any]: `${p.rot}deg`, ["--dur" as any]: `${p.dur}s`, ["--delay" as any]: `${p.delay}s` }}
+              style={{ fontSize: p.size, ["--rot" as any]: `${p.rot}deg`, ["--float-dur" as any]: `${Math.max(7, p.dur / 2)}s`, ["--float-delay" as any]: `${p.delay}s` }}
             >
               <Plus className="shrink-0 text-[#20808D]/55" style={{ width: p.size * 0.8, height: p.size * 0.8 }} />
               {p.label}

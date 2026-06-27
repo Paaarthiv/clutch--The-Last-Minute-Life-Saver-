@@ -209,13 +209,23 @@ button:disabled {
 }
 
 /* Scattered task-pill cloud — gentle bob, rotation held via the --rot custom property */
+@keyframes pillWander {
+  0%, 100% { transform: translate(-50%, -50%) translate3d(0, 0, 0); }
+  22%      { transform: translate(-50%, -50%) translate3d(calc(var(--wander-x, 42px) * 0.75), calc(var(--wander-y, 32px) * -0.45), 0); }
+  48%      { transform: translate(-50%, -50%) translate3d(var(--wander-x, 42px), var(--wander-y, 32px), 0); }
+  73%      { transform: translate(-50%, -50%) translate3d(calc(var(--wander-x, 42px) * -0.55), calc(var(--wander-y, 32px) * 0.72), 0); }
+}
+.pill-wander {
+  animation: pillWander var(--wander-dur, 20s) ease-in-out var(--wander-delay, 0s) infinite;
+  will-change: transform;
+}
 @keyframes pillFloat {
   0%, 100% { transform: rotate(var(--rot, 0deg)) translate3d(0, 0, 0); }
-  35%      { transform: rotate(calc(var(--rot, 0deg) + 1.5deg)) translate3d(8px, -10px, 0); }
-  70%      { transform: rotate(calc(var(--rot, 0deg) - 1deg)) translate3d(-6px, 5px, 0); }
+  50%      { transform: rotate(calc(var(--rot, 0deg) + 2deg)) translate3d(0, -5px, 0); }
 }
-.pill-float { animation: pillFloat var(--dur, 8s) ease-in-out var(--delay, 0s) infinite; will-change: transform; }
+.pill-float { animation: pillFloat var(--float-dur, 8s) ease-in-out var(--float-delay, 0s) infinite; will-change: transform; }
 .pill-float:hover { animation-play-state: paused; }
+.priority-modal-open .pill-wander,
 .priority-modal-open .pill-float,
 .priority-modal-open .capture-glow::before,
 .priority-modal-open .ambient-glow,
@@ -223,7 +233,10 @@ button:disabled {
 .priority-modal-open .agent-orb.thinking {
   animation-play-state: paused !important;
 }
-@media (prefers-reduced-motion: reduce) { .pill-float { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  .pill-wander,
+  .pill-float { animation: none !important; }
+}
 
 /* Obsidian/n8n-style node canvas backdrop (dot grid) */
 .node-canvas {
