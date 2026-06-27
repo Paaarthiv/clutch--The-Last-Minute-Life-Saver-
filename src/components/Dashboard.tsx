@@ -86,15 +86,22 @@ async function addBlocksToCalendar(blocks: ScheduledBlock[], clientId: string): 
   const y = now.getFullYear(), mo = now.getMonth() + 1, d = now.getDate();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const pad = (n: number) => String(n).padStart(2, "0");
-  const local = (hm: string) => { const [h, mi] = hm.split(":"); return `${y}-${pad(mo)}-${pad(d)}T${pad(+h)}:${pad(+mi)}:00`; };
+  const local = (hm: string, dayOffset = 0) => {
+    const [h, mi] = hm.split(":");
+    const dt = new Date(y, mo - 1, d + dayOffset, Number(h), Number(mi || 0), 0);
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:00`;
+  };
   let ok = 0;
   for (const b of blocks) {
+    const start = parseTimeStr(b.startTime);
+    const end = parseTimeStr(b.endTime);
+    const endDayOffset = end <= start ? 1 : 0;
     const event = {
       summary: b.title,
       description: "Planned by Clutch",
       colorId: "7",
       start: { dateTime: local(b.startTime), timeZone: tz },
-      end: { dateTime: local(b.endTime), timeZone: tz },
+      end: { dateTime: local(b.endTime, endDayOffset), timeZone: tz },
     };
     try {
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
@@ -579,11 +586,28 @@ function parseTimeStr(t: string): number {
   return h + (isNaN(m) ? 0 : m / 60);
 }
 
+function blockTimes(block: ScheduledBlock, windowStart = 0, windowEnd = 24) {
+  let start = parseTimeStr(block.startTime);
+  let end = parseTimeStr(block.endTime);
+  if (end <= start) end += 24;
+  if (windowEnd > 24 && start < windowStart) {
+    start += 24;
+    end += 24;
+  }
+  return { start, end: Math.max(start + 0.05, end) };
+}
+
+function displayWindow(settings: { workStart: number; workEnd: number }) {
+  const start = settings.workStart;
+  const end = settings.workEnd === start ? start + 1 : settings.workEnd <= start ? settings.workEnd + 24 : settings.workEnd;
+  return { start, end };
+}
+
 // Pack blocks into side-by-side columns so overlapping ones never stack on top of each other.
 // Returns each block with { col, cols } describing its lane and how wide its overlap cluster is.
-function layoutBlocks(schedule: ScheduledBlock[]) {
+function layoutBlocks(schedule: ScheduledBlock[], windowStart = 0, windowEnd = 24) {
   const blocks = schedule
-    .map((b, idx) => ({ b, idx, start: parseTimeStr(b.startTime), end: Math.max(parseTimeStr(b.startTime) + 0.05, parseTimeStr(b.endTime)) }))
+    .map((b, idx) => ({ b, idx, ...blockTimes(b, windowStart, windowEnd) }))
     .sort((a, z) => a.start - z.start || a.end - z.end);
 
   const out: { b: ScheduledBlock; idx: number; start: number; end: number; col: number; cols: number }[] = [];
@@ -613,9 +637,10 @@ function layoutBlocks(schedule: ScheduledBlock[]) {
 
 // 13.5 -> "1:30 PM"
 function fmt12(dec: number): string {
-  let h = Math.floor(dec);
-  const m = Math.round((dec - h) * 60);
-  const ap = h < 12 || h === 24 ? "AM" : "PM";
+  const normalized = ((dec % 24) + 24) % 24;
+  let h = Math.floor(normalized);
+  const m = Math.round((normalized - h) * 60);
+  const ap = h < 12 ? "AM" : "PM";
   let hh = h % 12; if (hh === 0) hh = 12;
   return `${hh}:${String(m).padStart(2, "0")} ${ap}`;
 }
@@ -631,24 +656,26 @@ function fmtDur(mins: number): string {
 // perfectly legible — unlike a proportional grid that has to squeeze 5-minute blocks.
 // "Now" focus companion — kills time-blindness by always answering "what do I do this minute?"
 function NowCard() {
-  const { schedule, executeAgentAction, isThinking } = useAgent();
+  const { schedule, executeAgentAction, isThinking, settings } = useAgent();
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 30000);
     return () => clearInterval(id);
   }, []);
 
+  const { start: windowStart, end: windowEnd } = displayWindow(settings);
   const now = new Date();
   const nowDec = now.getHours() + now.getMinutes() / 60;
+  const windowNow = windowEnd > 24 && nowDec < windowStart ? nowDec + 24 : nowDec;
   const blocks = schedule
-    .map((b) => ({ b, start: parseTimeStr(b.startTime), end: Math.max(parseTimeStr(b.startTime) + 0.05, parseTimeStr(b.endTime)) }))
+    .map((b) => ({ b, ...blockTimes(b, windowStart, windowEnd) }))
     .sort((a, z) => a.start - z.start);
-  const current = blocks.find((x) => nowDec >= x.start && nowDec < x.end);
-  const next = blocks.find((x) => x.start > nowDec);
+  const current = blocks.find((x) => windowNow >= x.start && windowNow < x.end);
+  const next = blocks.find((x) => x.start > windowNow);
   if (!current && !next) return null;
 
-  const minsLeft = current ? Math.max(0, Math.round((current.end - nowDec) * 60)) : 0;
-  const pct = current ? Math.min(100, Math.max(0, ((nowDec - current.start) / (current.end - current.start)) * 100)) : 0;
+  const minsLeft = current ? Math.max(0, Math.round((current.end - windowNow) * 60)) : 0;
+  const pct = current ? Math.min(100, Math.max(0, ((windowNow - current.start) / (current.end - current.start)) * 100)) : 0;
   const runningOver = () => {
     if (isThinking) return;
     executeAgentAction("", undefined, "I'm running over on my current task. Re-plan the rest of my day starting from the current time — keep what still fits, push or drop the rest. Do not create new tasks.");
@@ -682,7 +709,7 @@ function NowCard() {
 }
 
 function TimelineColumn() {
-  const { schedule } = useAgent();
+  const { schedule, settings } = useAgent();
 
   const [calState, setCalState] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [calMsg, setCalMsg] = useState("");
@@ -710,12 +737,14 @@ function TimelineColumn() {
     }
   };
 
+  const { start: windowStart, end: windowEnd } = displayWindow(settings);
   const blocks = schedule
-    .map((b, idx) => ({ b, idx, start: parseTimeStr(b.startTime), end: Math.max(parseTimeStr(b.startTime) + 0.05, parseTimeStr(b.endTime)) }))
+    .map((b, idx) => ({ b, idx, ...blockTimes(b, windowStart, windowEnd) }))
     .sort((a, z) => a.start - z.start || a.end - z.end);
 
   const now = new Date();
   const nowDec = now.getHours() + now.getMinutes() / 60;
+  const windowNow = windowEnd > 24 && nowDec < windowStart ? nowDec + 24 : nowDec;
 
   return (
     <div className="w-full xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[420px] xl:min-h-0">
@@ -751,8 +780,8 @@ function TimelineColumn() {
         ) : (
           <>
             {blocks.map(({ b: block, idx, start, end }, i) => {
-              const isCurrent = nowDec >= start && nowDec < end;
-              const isPast = nowDec >= end;
+              const isCurrent = windowNow >= start && windowNow < end;
+              const isPast = windowNow >= end;
               const dur = (end - start) * 60;
               return (
                 <div
@@ -1595,15 +1624,17 @@ function CalendarView() {
     d.setDate(startOfWeek.getDate() + i);
     return d;
   });
-  const startH = Math.min(settings.workStart, settings.workEnd);
-  const endH = Math.max(settings.workStart, settings.workEnd);
-  const hours = Array.from({ length: Math.max(1, endH - startH) }, (_, i) => startH + i);
-  const hourLabel = (h: number) => (h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`);
+  const { start: startH, end: endH } = displayWindow(settings);
+  const hours = Array.from({ length: Math.max(1, Math.ceil(endH - startH)) }, (_, i) => startH + i);
+  const hourLabel = (h: number) => {
+    const normalized = ((h % 24) + 24) % 24;
+    return normalized === 0 ? '12 AM' : normalized < 12 ? `${normalized} AM` : normalized === 12 ? '12 PM' : `${normalized - 12} PM`;
+  };
 
   const HOURPX = 84;
   const bodyH = hours.length * HOURPX;
   const gridTpl = `56px repeat(7, minmax(0, 1fr))`;
-  const laid = layoutBlocks(schedule); // packs true overlaps into columns
+  const laid = layoutBlocks(schedule, startH, endH); // packs true overlaps into columns
 
   return (
     <main className="flex-1 overflow-auto custom-scrollbar px-4 md:px-8 py-6">
@@ -1638,11 +1669,13 @@ function CalendarView() {
                 {hours.map((h, hi) => (
                   <div key={h} className="absolute left-0 right-0 border-t border-[#ECE9E1]" style={{ top: hi * HOURPX }} />
                 ))}
-                {isToday && laid.map(({ b, idx, start, end, col, cols }) => {
-                  const top = Math.max(0, (start - startH) * HOURPX);
+                {isToday && laid.filter(({ start, end }) => end > startH && start < endH).map(({ b, idx, start, end, col, cols }) => {
+                  const visibleStart = Math.max(start, startH);
+                  const visibleEnd = Math.min(end, endH);
+                  const top = Math.max(0, (visibleStart - startH) * HOURPX);
                   // True proportional height (just a 1px gap) — no inflated minimum, so adjacent
                   // short blocks tile cleanly instead of overlapping the next one.
-                  const height = Math.max(3, Math.min((end - start) * HOURPX - 1, bodyH - top));
+                  const height = Math.max(3, Math.min((visibleEnd - visibleStart) * HOURPX - 1, bodyH - top));
                   const gap = 3;
                   const inset = 4; // keep blocks clear of the column borders
                   const colW = `((100% - ${inset * 2}px - ${gap * (cols - 1)}px) / ${cols})`;

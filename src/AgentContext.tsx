@@ -49,10 +49,17 @@ function friendlyAgentError(raw: string): string {
 }
 
 function fmtHM(dec: number): string {
-  let total = Math.round(dec * 60);
-  total = Math.max(0, Math.min(23 * 60 + 59, total));
-  const h = Math.floor(total / 60), m = total % 60;
+  const total = Math.round(dec * 60);
+  const normalized = ((total % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const h = Math.floor(normalized / 60), m = normalized % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function planningWindow(settings: Settings): { start: number; end: number } {
+  const start = Math.trunc(Math.max(0, Math.min(23, settings.workStart)));
+  const rawEnd = Math.trunc(Math.max(0, Math.min(23, settings.workEnd)));
+  const end = rawEnd === start ? start + 1 : rawEnd <= start ? rawEnd + 24 : rawEnd;
+  return { start, end };
 }
 
 // Deterministic local scheduler: the Today's Plan is always derived from the prioritized tasks,
@@ -76,16 +83,19 @@ function buildSchedule(tasks: PrioritizedTask[], settings: Settings): ScheduledB
     (a.createdAt || 0) - (b.createdAt || 0)
   );
 
-  const startH = Math.min(settings.workStart, settings.workEnd);
+  const { start: startH, end: endH } = planningWindow(settings);
   const d = new Date();
   const nowDec = d.getHours() + d.getMinutes() / 60;
-  let cursor = Math.max(startH, Math.ceil(nowDec * 12) / 12); // round up to the next 5 minutes
+  const windowNow = endH > 24 && nowDec < startH ? nowDec + 24 : nowDec;
+  if (windowNow >= endH) return [];
+  let cursor = Math.max(startH, Math.ceil(windowNow * 12) / 12); // round up to the next 5 minutes
 
   const blocks: ScheduledBlock[] = [];
   for (const t of schedulable) {
-    if (cursor >= 24) break;
+    if (cursor >= endH) break;
     const dur = Math.max(5, t.estimated_minutes || 30) / 60;
-    const end = Math.min(24, cursor + dur);
+    const end = Math.min(endH, cursor + dur);
+    if (end <= cursor) break;
     blocks.push({ taskId: t.id, title: t.title, startTime: fmtHM(cursor), endTime: fmtHM(end) });
     cursor = end;
   }
@@ -335,7 +345,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const goHome = () => setHasSeenIntro(false);
 
   const updateSettings = (patch: Partial<Settings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    setSchedule(buildSchedule(tasks, next));
   };
 
   const archiveTask = (id: string) => {
