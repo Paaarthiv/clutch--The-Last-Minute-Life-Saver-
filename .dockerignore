@@ -1,8 +1,8 @@
 node_modules
 dist
 .vite
-.env
-.env.local
+.env*
+!.env.example
 .git
 npm-debug.log
 *.zip
