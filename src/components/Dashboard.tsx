@@ -461,7 +461,8 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
   );
 }
 
-// The Today board: chat on the left, a single live plan in the middle, activity on the right.
+// The Today board keeps chat + plan primary; activity only becomes a side column
+// on very wide screens so expanding it cannot squeeze the plan on laptops.
 function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement> }) {
   return (
     <div className="flex-1 flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-6 px-4 md:px-8 py-6 h-full overflow-y-auto 2xl:overflow-hidden custom-scrollbar">
@@ -671,18 +672,18 @@ function TimelineColumn() {
   return (
     <div className="w-full xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[420px] xl:min-h-0">
       <div className="p-4 border-b border-[#E6E3DC] bg-black/[0.025] shrink-0 z-10">
-        <div className="flex justify-between items-start gap-3">
+        <div className="flex flex-col gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
               <Calendar className="w-4 h-4 text-[#20808D] shrink-0" />
-              <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold">Today's Plan</span>
+              <span className="text-[11px] uppercase tracking-widest text-[#5B6B6E] font-bold whitespace-nowrap">Today's Plan</span>
               {activeCount > 0 && <span className="text-[10px] font-bold text-[#20808D] bg-[#20808D]/10 rounded-full px-2 py-0.5">{activeCount}</span>}
             </div>
-            <p className="text-[11px] text-[#9AA7A9] leading-relaxed mt-2">
+            <p className="text-[11px] text-[#9AA7A9] leading-relaxed mt-2 max-w-[46rem]">
               Timed by urgency: <span className="font-semibold text-[#5B6B6E]">NOW - NEXT - LATER</span>. Big blocks can break into smaller steps without losing their time slot.
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {hasTasks && (
               <button onClick={reprioritize} disabled={isThinking} title="Re-evaluate and re-rank all tasks together" className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg border border-[#20808D]/25 text-[#20808D] hover:bg-[#20808D]/5 disabled:opacity-50 transition-colors">
                 <RotateCcw className={clsx("w-3.5 h-3.5", isThinking && "animate-spin")} />
@@ -831,13 +832,13 @@ function TimelineColumn() {
 function AgentActivityFeed() {
   const { activityFeed, isThinking } = useAgent();
 
-  // Only resizable on wide (xl) layouts, where the feed is a side column.
+  // Only resizable on very wide layouts, where the feed is a true side column.
   const [isWide, setIsWide] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1536px)").matches
   );
   const [width, setWidth] = useState<number>(() => {
     const saved = Number(localStorage.getItem("clutch_activity_width"));
-    return saved >= 240 && saved <= 640 ? saved : 300;
+    return saved >= 240 && saved <= 380 ? saved : 300;
   });
   const dragging = useRef(false);
   const startX = useRef(0);
@@ -846,7 +847,7 @@ function AgentActivityFeed() {
   widthRef.current = width;
 
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1280px)");
+    const mq = window.matchMedia("(min-width: 1536px)");
     const onChange = () => setIsWide(mq.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
@@ -856,7 +857,7 @@ function AgentActivityFeed() {
     const onMove = (e: MouseEvent) => {
       if (!dragging.current) return;
       const delta = startX.current - e.clientX; // drag the handle left → wider panel
-      setWidth(Math.min(640, Math.max(240, startW.current + delta)));
+      setWidth(Math.min(380, Math.max(240, startW.current + delta)));
     };
     const onUp = () => {
       if (!dragging.current) return;
@@ -894,7 +895,7 @@ function AgentActivityFeed() {
   // Collapsed + wide: render a slim rail with an expand button.
   if (isWide && collapsed) {
     return (
-      <div className="xl:flex-shrink-0 flex flex-col items-center gap-3 w-10 border-l border-[#EDEAE2] pl-2">
+      <div className="2xl:flex-shrink-0 flex flex-col items-center gap-3 w-10 border-l border-[#EDEAE2] pl-2">
         <button
           onClick={toggleCollapsed}
           title="Expand activity"
@@ -909,9 +910,9 @@ function AgentActivityFeed() {
   }
 
   return (
-    <div className="w-full xl:flex-shrink-0 flex xl:pl-4 xl:border-l xl:border-[#EDEAE2]" style={isWide && !collapsed ? { width } : undefined}>
+    <div className="w-full 2xl:flex-shrink-0 flex 2xl:pl-4 2xl:border-l 2xl:border-[#EDEAE2]" style={isWide && !collapsed ? { width } : undefined}>
       {/* Content column */}
-      <div className="flex-1 min-w-0 flex flex-col gap-4 xl:h-full">
+      <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-full">
         <div className="flex items-center justify-between shrink-0">
           <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Agent Activity</div>
           <button
@@ -928,7 +929,7 @@ function AgentActivityFeed() {
         )}
 
         {!collapsed && (<>
-        <div className="activity-scroll xl:flex-1 text-[10px] space-y-4 overflow-y-auto overflow-x-hidden pr-2 pb-6 xl:pb-20 max-h-80 xl:max-h-none custom-scrollbar">
+        <div className="activity-scroll 2xl:flex-1 text-[10px] space-y-4 overflow-y-auto overflow-x-hidden pr-2 pb-6 2xl:pb-20 max-h-80 2xl:max-h-none custom-scrollbar">
             {isThinking && (
               <div className="flex gap-3">
                 <div className="w-1 h-1 bg-[#20808D] rounded-full mt-1.5 shrink-0 animate-pulse" />
