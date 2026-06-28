@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import clsx from "clsx";
 
 import { ClutchLogo } from "./ClutchLogo";
+import { rescueSpeech, speakText } from "../lib/speak";
 
 interface TaskCardProps {
   task: any;
@@ -28,29 +29,6 @@ function LoadBadge({ load }: { load?: string }) {
       {m.label}
     </span>
   );
-}
-
-// Clutch speaks — try Google Cloud TTS (premium voice), fall back to the browser voice.
-let clutchAudio: HTMLAudioElement | null = null;
-async function speakText(text: string) {
-  if (clutchAudio) { clutchAudio.pause(); clutchAudio = null; }
-  try { window.speechSynthesis?.cancel(); } catch {}
-  try {
-    const res = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-    if (res.ok && (res.headers.get("content-type") || "").includes("audio")) {
-      const url = URL.createObjectURL(await res.blob());
-      const audio = new Audio(url);
-      clutchAudio = audio;
-      audio.onended = () => { URL.revokeObjectURL(url); if (clutchAudio === audio) clutchAudio = null; };
-      await audio.play();
-      return;
-    }
-  } catch { /* fall through to browser voice */ }
-  try {
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1;
-    window.speechSynthesis?.speak(u);
-  } catch {}
 }
 
 // Google Calendar sync via Google Identity Services (client-side token flow — no server tokens).
@@ -1056,7 +1034,7 @@ function RescueModal() {
               <h2 className="text-lg font-display font-bold text-[#13343B]">Clutch Mode</h2>
             </div>
             <button
-              onClick={() => speakText([rescueState.message, rescueState.firstStep ? `First, ${rescueState.firstStep}` : "", rescueState.doNow.length ? `Do now: ${rescueState.doNow.map((d) => getTitle(d.taskId)).join(", ")}.` : ""].filter(Boolean).join(" "))}
+              onClick={() => speakText(rescueSpeech(rescueState, getTitle))}
               title="Read this plan aloud"
               className="flex items-center gap-1.5 text-[11px] font-semibold text-[#C2410C] hover:text-[#9A330A] px-2.5 py-1.5 rounded-lg hover:bg-[#C2410C]/[0.06] transition-colors shrink-0"
             >
@@ -1851,12 +1829,23 @@ function SettingsView() {
 
         <div className="glass-card p-6 flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-[#13343B]">Voice input</div>
+            <div className="text-sm font-semibold text-[#13343B]">Voice input — dictate your tasks</div>
             <div className="text-[12px] text-[#5B6B6E]">Show the microphone for hands-free capture.</div>
           </div>
           <button onClick={() => updateSettings({ voiceEnabled: !settings.voiceEnabled })}
             className={clsx("w-12 h-6 rounded-full transition-colors relative shrink-0", settings.voiceEnabled ? "bg-[#20808D]" : "bg-black/[0.06]")}>
             <span className={clsx("absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all", settings.voiceEnabled ? "left-[26px]" : "left-0.5")} />
+          </button>
+        </div>
+
+        <div className="glass-card p-6 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-[#13343B]">Agent voice — speak responses aloud</div>
+            <div className="text-[12px] text-[#5B6B6E]">Let Clutch read plan summaries, replans, and Clutch Mode out loud.</div>
+          </div>
+          <button onClick={() => updateSettings({ speakEnabled: !settings.speakEnabled })}
+            className={clsx("w-12 h-6 rounded-full transition-colors relative shrink-0", settings.speakEnabled ? "bg-[#20808D]" : "bg-black/[0.06]")}>
+            <span className={clsx("absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all", settings.speakEnabled ? "left-[26px]" : "left-0.5")} />
           </button>
         </div>
 

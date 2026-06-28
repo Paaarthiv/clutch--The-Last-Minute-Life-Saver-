@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, ReactNode } from "react";
 import { PrioritizedTask, ScheduledBlock, AgentAction, ReplanState, RescueState } from "./types";
+import { planSpeech, replanSpeech, rescueSpeech, speakText, stopSpeaking } from "./lib/speak";
 
 export interface Settings {
   workStart: number; // hour, 0-23
@@ -7,8 +8,9 @@ export interface Settings {
   peakStart: number; // peak-energy window start hour
   peakEnd: number;   // peak-energy window end hour
   voiceEnabled: boolean;
+  speakEnabled: boolean;
 }
-const DEFAULT_SETTINGS: Settings = { workStart: 9, workEnd: 18, peakStart: 9, peakEnd: 12, voiceEnabled: true };
+const DEFAULT_SETTINGS: Settings = { workStart: 9, workEnd: 18, peakStart: 9, peakEnd: 12, voiceEnabled: true, speakEnabled: true };
 
 interface AppState {
   tasks: PrioritizedTask[];
@@ -474,10 +476,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      let nextTasksForSpeech: PrioritizedTask[] | null = null;
       if (data.tasks) {
         const cleanedTasks = removeConflictingNewTaskPins(previousSchedule, previousTasks, data.tasks, settings, text, actionTrigger);
         const breakdownSchedule = splitScheduleForBreakdown(previousSchedule, previousTasks, cleanedTasks);
         const nextTasks = breakdownSchedule?.tasks || cleanedTasks;
+        nextTasksForSpeech = nextTasks;
         setTasks(nextTasks);
         setSchedule(breakdownSchedule?.schedule || buildSchedule(nextTasks, settings));
       }
@@ -499,6 +503,18 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           });
           return updated.slice(0, 100);
         });
+      }
+      if (settings.speakEnabled) {
+        const speechTasks = nextTasksForSpeech || tasks;
+        const titleOf = (id: string) => speechTasks.find((task) => task.id === id)?.title || "Task";
+        const isBreakdownOnly = /break\s+down|parentTaskId/i.test(`${text || ""} ${actionTrigger || ""}`);
+        if (data.rescue) {
+          speakText(rescueSpeech(data.rescue, titleOf));
+        } else if (data.replan) {
+          speakText(replanSpeech(data.replan, titleOf));
+        } else if (nextTasksForSpeech && !isBreakdownOnly) {
+          speakText(planSpeech(nextTasksForSpeech));
+        }
       }
     } catch (e) {
       console.error(e);
@@ -571,6 +587,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = (patch: Partial<Settings>) => {
     const next = { ...settings, ...patch };
+    if (patch.speakEnabled === false) stopSpeaking();
     setSettings(next);
     setSchedule(buildSchedule(tasks, next));
   };
