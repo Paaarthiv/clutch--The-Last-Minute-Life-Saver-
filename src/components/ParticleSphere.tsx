@@ -103,7 +103,7 @@ export function ParticleSphere({
             o.vy += (ddy / dist) * f;
           }
         }
-        // Each pill repels the dots around it (ellipse sized to that pill).
+        // Each pill repels the dots around a rounded-rectangle-like field sized to the pill.
         const nds = nodesRef.current;
         const cfg = cfgRef.current;
         for (let k = 0; k < nds.length; k++) {
@@ -111,7 +111,8 @@ export function ParticleSphere({
           const nxp = cx + nd.ox * R, nyp = cy + nd.oy * R;
           const ndx = sx - nxp, ndy = sy - nyp;
           const PA = nd.rx + cfg.pillFieldA, PB = nd.ry + cfg.pillFieldB;
-          const ned = Math.sqrt((ndx * ndx) / (PA * PA) + (ndy * ndy) / (PB * PB));
+          const qx = Math.abs(ndx) / PA, qy = Math.abs(ndy) / PB;
+          const ned = Math.pow(qx * qx * qx * qx + qy * qy * qy * qy, 0.25);
           if (ned < 1) {
             const dlen = Math.hypot(ndx, ndy) || 1;
             const bf = (1 - ned) * cfg.pillForce;
@@ -123,12 +124,15 @@ export function ParticleSphere({
         o.vx *= 0.86; o.vy *= 0.86;
         o.dx += o.vx; o.dy += o.vy;
         sx += o.dx; sy += o.dy;
-        // never render a dot on top of any pill
+        // Never render a dot on top of any pill. Use the same superellipse shape
+        // as the repel field so the cleared area follows the rounded pill silhouette.
         let hidden = false;
         for (let k = 0; k < nds.length; k++) {
           const nd = nds[k];
           const nxp = cx + nd.ox * R, nyp = cy + nd.oy * R;
-          if (Math.abs(sx - nxp) < nd.rx + cfg.pillClear && Math.abs(sy - nyp) < nd.ry + cfg.pillClear) { hidden = true; break; }
+          const PA = nd.rx + cfg.pillClear, PB = nd.ry + cfg.pillClear;
+          const qx = Math.abs(sx - nxp) / PA, qy = Math.abs(sy - nyp) / PB;
+          if (qx * qx * qx * qx + qy * qy * qy * qy < 1) { hidden = true; break; }
         }
         if (hidden) continue;
         pts.push({ sx, sy, z });

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useAgent } from "../AgentContext";
 import {
   Mic, ArrowRight, Sparkles, Check, Zap, CalendarClock, Brain,
@@ -16,7 +16,9 @@ export function IntroScreen() {
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [geo, setGeo] = useState<{ cx: number; cy: number; r: number } | null>(null);
+  const [pillSizes, setPillSizes] = useState<Record<string, { rx: number; ry: number }>>({});
   const pageGlowRef = useRef<HTMLDivElement>(null);
+  const pillRefs = useRef<Record<string, HTMLSpanElement | null>>({});
 
   const onPageMove = (e: React.MouseEvent) => {
     const el = pageGlowRef.current;
@@ -65,15 +67,47 @@ export function IntroScreen() {
   };
 
   // ox/oy are offsets from the sphere center in units of the sphere radius R (so they scale
-  // with the sphere). rx/ry are the pill's half-width/height in px, used to size its repel field.
+  // with the sphere). rx/ry are fallbacks; the rendered pill sizes are measured below so the
+  // dot clearing follows the actual label width on each browser/font.
   const audienceNodes: { label: string; ox: number; oy: number; rx: number; ry: number; main?: boolean }[] = [
-    { label: "Built for", ox: 0, oy: 0, rx: 58, ry: 20, main: true },
-    { label: "Students", ox: -0.25, oy: -0.27, rx: 56, ry: 20 },
-    { label: "Founders", ox: 0.25, oy: -0.27, rx: 54, ry: 20 },
-    { label: "Freelancers", ox: 0.34, oy: -0.02, rx: 62, ry: 20 },
-    { label: "Makers", ox: -0.34, oy: -0.02, rx: 50, ry: 20 },
-    { label: "Anyone with a deadline", ox: 0.0, oy: 0.34, rx: 96, ry: 20 },
+    { label: "Built for", ox: 0, oy: 0, rx: 45, ry: 17, main: true },
+    { label: "Students", ox: -0.25, oy: -0.27, rx: 50, ry: 18 },
+    { label: "Founders", ox: 0.25, oy: -0.27, rx: 51, ry: 18 },
+    { label: "Freelancers", ox: 0.34, oy: -0.02, rx: 65, ry: 18 },
+    { label: "Makers", ox: -0.34, oy: -0.02, rx: 48, ry: 18 },
+    { label: "Anyone with a deadline", ox: 0.0, oy: 0.34, rx: 96, ry: 18 },
   ];
+  const sphereNodes = audienceNodes.map((n) => ({ ...n, ...(pillSizes[n.label] ?? {}) }));
+
+  useEffect(() => {
+    if (!geo) return;
+    const measure = () => {
+      const next: Record<string, { rx: number; ry: number }> = {};
+      for (const n of audienceNodes) {
+        const el = pillRefs.current[n.label];
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        next[n.label] = { rx: Math.ceil(rect.width / 2), ry: Math.ceil(rect.height / 2) };
+      }
+      setPillSizes((prev) => {
+        const keys = Object.keys(next);
+        if (keys.length === 0) return prev;
+        const same = keys.length === Object.keys(prev).length && keys.every((k) => prev[k]?.rx === next[k].rx && prev[k]?.ry === next[k].ry);
+        return same ? prev : next;
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const n of audienceNodes) {
+      const el = pillRefs.current[n.label];
+      if (el) ro.observe(el);
+    }
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [geo]);
 
   const planRows = [
     { t: "Reply to recruiter email", m: "9:00", now: true },
@@ -330,16 +364,25 @@ export function IntroScreen() {
       </section>
 
       {/* 3D SPHERE with the "Built for" constellation overlaid */}
-      <section id="sphere" className="relative z-0 -mt-24 md:-mt-56 scroll-mt-20">
-        <div className="relative h-[560px] md:h-[860px]">
+      <section id="sphere" className="relative z-0 -mt-16 md:-mt-40 scroll-mt-20">
+        <div className="relative h-[440px] md:h-[660px]">
           <div className="absolute inset-0">
-            <ParticleSphere nodes={audienceNodes.map((n) => ({ ox: n.ox, oy: n.oy, rx: n.rx, ry: n.ry }))} onGeo={setGeo} />
+            <ParticleSphere
+              nodes={sphereNodes.map((n) => ({ ox: n.ox, oy: n.oy, rx: n.rx, ry: n.ry }))}
+              onGeo={setGeo}
+              count={2200}
+              radiusScale={0.78}
+              cyRatio={0.52}
+              pillFieldA={16}
+              pillFieldB={10}
+              pillClear={4}
+            />
           </div>
 
           {/* Overlay positioned in the sphere's own pixel geometry so pills sit over it */}
           {geo && (
             <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute w-[360px] h-[360px] rounded-full" style={{ left: geo.cx, top: geo.cy, transform: "translate(-50%, -50%)", background: "radial-gradient(circle, rgba(32,128,141,0.12), transparent 65%)" }} />
+              <div className="absolute w-[280px] h-[280px] rounded-full" style={{ left: geo.cx, top: geo.cy, transform: "translate(-50%, -50%)", background: "radial-gradient(circle, rgba(32,128,141,0.12), transparent 65%)" }} />
               <svg className="absolute inset-0 h-full w-full">
                 {audienceNodes.filter((n) => !n.main).map((n, i) => (
                   <line key={i} x1={geo.cx} y1={geo.cy} x2={geo.cx + n.ox * geo.r} y2={geo.cy + n.oy * geo.r} stroke="#20808D" strokeOpacity="0.28" strokeWidth="1" />
@@ -348,9 +391,9 @@ export function IntroScreen() {
               {audienceNodes.map((n, i) => (
                 <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: geo.cx + n.ox * geo.r, top: geo.cy + n.oy * geo.r }}>
                   {n.main ? (
-                    <span className="px-4 py-1.5 rounded-full bg-[#13343B] text-white text-[13px] font-semibold shadow-[0_6px_18px_rgba(19,52,59,0.25)]">{n.label}</span>
+                    <span ref={(el) => { pillRefs.current[n.label] = el; }} className="px-4 py-1.5 rounded-full bg-[#13343B] text-white text-[13px] font-semibold shadow-[0_6px_18px_rgba(19,52,59,0.25)]">{n.label}</span>
                   ) : (
-                    <span className="flex items-center gap-2 bg-white border border-[#E6E3DC] rounded-full px-3.5 py-1.5 shadow-[0_6px_18px_rgba(19,52,59,0.08)] whitespace-nowrap">
+                    <span ref={(el) => { pillRefs.current[n.label] = el; }} className="flex items-center gap-2 bg-white border border-[#E6E3DC] rounded-full px-3.5 py-1.5 shadow-[0_6px_18px_rgba(19,52,59,0.08)] whitespace-nowrap">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#20808D] shrink-0" />
                       <span className="text-[13px] font-medium text-[#13343B]">{n.label}</span>
                     </span>
@@ -363,7 +406,7 @@ export function IntroScreen() {
       </section>
 
       {/* PROBLEM — passive reminders vs. action-focused agent */}
-      <section className="relative z-10 max-w-6xl mx-auto px-6 -mt-16 md:-mt-32 pb-20">
+      <section className="relative z-10 max-w-6xl mx-auto px-6 -mt-10 md:-mt-20 pb-20">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <div className="text-[#20808D] text-[13px] font-semibold uppercase tracking-widest mb-3">The problem</div>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-[#13343B] tracking-tight">Reminders are passive. Clutch takes action.</h2>

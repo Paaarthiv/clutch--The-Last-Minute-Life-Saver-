@@ -342,7 +342,6 @@ button:disabled {
   animation: bwgScroll 32s linear infinite;
   will-change: transform;
 }
-.bwg-viewport:hover .bwg-track { animation-play-state: paused; }
 
 /* Horizontal "train" variant — track holds two identical copies side by side. */
 @keyframes bwgScrollX {
@@ -358,7 +357,6 @@ button:disabled {
   animation: bwgScrollX 40s linear infinite;
   will-change: transform;
 }
-.bwg-viewport-h:hover .bwg-track-h { animation-play-state: paused; }
 
 /* Frosted-glass card for the "How it works" steps. No overflow:hidden so the
    connector arrow can sit outside the card edge. */
