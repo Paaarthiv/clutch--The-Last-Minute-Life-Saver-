@@ -4,221 +4,159 @@
 
 ### The Last-Minute Life Saver
 
-**An autonomous AI agent that turns a panicked brain-dump into a prioritized, time-blocked, self-correcting plan — and rescues you when you fall behind.**
+**An autonomous AI productivity agent that turns a messy brain-dump into a prioritized, time-blocked, self-correcting plan.**
 
-[Live Application](https://clutch-433410067334.asia-south1.run.app/) · [Report an Issue](https://github.com/Paaarthiv/clutch--The-Last-Minute-Life-Saver-/issues)
+[Live Application](https://clutch-433410067334.asia-south1.run.app/) · [GitHub Repository](https://github.com/Paaarthiv/clutch--The-Last-Minute-Life-Saver-)
 
-Built for **Vibe2Ship** (Coding Ninjas 10X Club × Google for Developers) — Problem Statement 1
+Built for **Vibe2Ship 2026** by Coding Ninjas 10X Club x Google for Developers  
+Problem Statement 1: **The Last-Minute Life Saver**
 
 </div>
 
 ---
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Why It Is an Agent, Not a Chatbot](#why-it-is-an-agent-not-a-chatbot)
-- [Features](#features)
-- [How It Works](#how-it-works)
-- [Tech Stack](#tech-stack)
-- [Google Technologies](#google-technologies)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Deployment](#deployment)
-- [Project Structure](#project-structure)
-- [API Reference](#api-reference)
-- [Demo Flow](#demo-flow)
-- [License](#license)
-
----
-
 ## Overview
 
-Everyone has had the same 11 PM moment: three deadlines, a head full of half-remembered tasks, and no idea where to start. The bottleneck is not a lack of to-do apps — it is the decision paralysis of converting chaos into a concrete next move.
+Students, professionals, and entrepreneurs often miss deadlines not because they do not care, but because passive reminders do not help them decide what to do next. Clutch solves that problem by acting as an AI-powered deadline-defense companion.
 
-Clutch attacks that bottleneck directly. You dump everything on your plate in plain language — or a photo of a handwritten or whiteboard list — and Clutch reasons in multiple steps, then *takes action on your behalf*: it structures your tasks, breaks large goals into subtasks, ranks everything by urgency and importance, and time-blocks your day around your real working hours and energy peaks. When you inevitably fall behind, **Clutch Mode** performs an emergency triage and tells you exactly what to do right now, what to drop, and reads the plan aloud so you can move while you listen.
+Users can brain-dump tasks in plain language, speak them, or upload a photo of a handwritten or whiteboard task list. Clutch uses Gemini to structure the mess into tasks, prioritize them into NOW / NEXT / LATER, break down large goals, and create a realistic schedule around working hours, fixed commitments, and peak-focus windows.
 
-Every autonomous action streams into a live Agent Activity feed, so you can watch the agent think.
+When the user falls behind, Clutch Mode runs an emergency triage: it tells the user the first physical step to take, what to keep, what to move, what to drop, and can speak the rescue plan aloud.
 
-## Why It Is an Agent, Not a Chatbot
+## Why This Is an Agent
 
-Clutch runs a genuine multi-step **function-calling loop** with Google Gemini. The model is given a toolset and decides, on its own, which tools to call and in what order. The server executes each call, assigns real identifiers, and feeds the results back into the next turn — so a single brain-dump produces a complete, coherent plan through a chain of autonomous reasoning and tool use.
+Clutch is not a chatbot wrapper. The backend runs an iterative Gemini function-calling loop. Gemini receives a toolset, decides which tool to call, the server executes that action, and the result is fed back into the next reasoning turn until the plan is complete.
 
-| Tool | Autonomous action the agent takes |
-|------|-----------------------------------|
-| `create_tasks` | Parses a text, voice, or photo brain-dump into structured tasks — title, time estimate, deadline, importance (1–5), and cognitive load (deep / light / admin) |
-| `breakdown_goal` | Splits a large goal into ordered, actionable subtasks |
-| `prioritize` | Ranks every task into NOW / NEXT / LATER, each with a one-line justification |
-| `replan` | When you fall behind or drop a task, proposes an explicit keep / move / drop plan |
-| `rescue_triage` | Powers Clutch Mode — returns the first physical step, a do-now shortlist, optional items, and what to abandon |
+| Tool | Autonomous action |
+| --- | --- |
+| `create_tasks` | Converts text, voice, or image brain-dumps into structured tasks with estimates, deadlines, importance, and cognitive load. |
+| `breakdown_goal` | Splits a large task into ordered subtasks. |
+| `prioritize` | Ranks tasks into NOW / NEXT / LATER with a short reason. |
+| `replan` | Suggests keep / move / drop decisions when plans change. |
+| `rescue_triage` | Powers Clutch Mode with an emergency first step and rescue shortlist. |
 
-Beyond the model loop, the agent acts deterministically as well. A local priority-driven scheduler (`buildSchedule`) converts the agent's NOW / NEXT / LATER ranking into a real, packed timeline — honoring fixed-time commitments, ordering deep work first, supporting planning windows that cross midnight, and automatically resolving overlaps. The plan always reflects current priorities and re-derives instantly on every change. The agent does not just suggest; it commits the schedule.
+After the AI reasoning step, a deterministic scheduler builds the timeline. It respects fixed-time tasks, supports planning windows that cross midnight, prioritizes deep work during the peak-energy window, and resolves overlaps.
 
-## Features
+## Key Features
 
-**Autonomous planning**
+- Brain-dump to structured task plan using Gemini.
+- Voice input for fast task capture.
+- Gemini Vision support for handwritten or whiteboard task lists.
+- NOW / NEXT / LATER prioritization with reasons.
+- Goal breakdown into subtasks.
+- Energy-aware time-blocked schedule.
+- Fixed-time commitment handling, such as "gym 6 PM to 8 PM".
+- Clutch Mode emergency rescue flow.
+- Spoken rescue summaries using Google Cloud Text-to-Speech.
+- Google Calendar sync for planned blocks.
+- Firestore persistence for tasks, settings, archive, and state.
+- Live Agent Activity feed showing what the agent is doing.
+- Polished landing page and responsive dashboard experience.
 
-- Brain-dump to plan in seconds, from text, voice, or a photo read by Gemini Vision
-- Goal breakdown into ordered subtasks with a single click
-- Proactive re-planning that recommends exactly what to keep, move, or cut
-- A live Agent Activity feed showing every autonomous action as it happens
+## Google Technologies Used
 
-**Signature differentiators**
-
-- **Clutch Mode** — a panic button that runs an emergency triage and reads the rescue plan aloud via Google Cloud Text-to-Speech
-- **Energy-aware scheduling** — front-loads deep-cognitive work into your peak-focus window and pushes lighter tasks to the troughs
-- **Now focus companion** — a calm, single-task view that hides the rest of the list when you are heads-down
-
-**Persistence and sync**
-
-- Firestore-backed state that survives across devices and reloads
-- Google Calendar sync to push the agent's time-blocks into your real calendar
-
-**Experience**
-
-- A premium light and teal interface with an ambient, cursor-reactive design language, a glassmorphic Clutch Mode control, and a live "now" line on the timeline
-
-## How It Works
-
-```
-Brain-dump (text / voice / photo)
-        │
-        ▼
-POST /api/agent  ──►  Gemini function-calling loop
-        │                 │
-        │                 ├─ create_tasks
-        │                 ├─ breakdown_goal
-        │                 ├─ prioritize
-        │                 └─ replan
-        │
-        ▼
-Server assigns real IDs, returns structured tasks
-        │
-        ▼
-Client buildSchedule()  ──►  deterministic, conflict-free timeline
-        │
-        ▼
-Dashboard: Priorities · Schedule · Agent Activity · Now · Clutch Mode
-```
+| Google technology | Usage |
+| --- | --- |
+| Google AI Studio | Gemini API key, model experimentation, and primary AI development workflow. |
+| Google Gemini API | Agent reasoning, prioritization, planning, replanning, and rescue triage. |
+| Gemini Vision | Reads task lists from images. |
+| Google Cloud Run | Hosts the deployed full-stack application. |
+| Google Cloud Build | Builds the application from source for Cloud Run. |
+| Artifact Registry | Stores built Cloud Run container images. |
+| Secret Manager | Stores the Gemini API key securely. |
+| Firestore | Persists user state and settings. |
+| Cloud Text-to-Speech | Speaks Clutch Mode and agent summaries aloud. |
+| Google Calendar API | Adds generated schedule blocks to the user's calendar. |
+| Google Fonts | Typography for the landing page and app UI. |
 
 ## Tech Stack
 
 | Layer | Technologies |
-|-------|--------------|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Framer Motion, lucide-react, date-fns |
-| Backend | Node.js, Express, `@google/genai`, esbuild server bundle |
-| AI | Google Gemini (`gemini-2.5-flash`) via a multi-step function-calling loop, plus Gemini Vision |
-| Cloud | Google Cloud Run, Cloud Build, Artifact Registry, Secret Manager, Cloud Text-to-Speech, Firestore, Calendar API |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Motion, lucide-react, date-fns |
+| Backend | Node.js, Express, TypeScript, esbuild |
+| AI | `@google/genai`, Gemini 2.5 Flash |
+| Google Cloud | Cloud Run, Cloud Build, Artifact Registry, Secret Manager, Firestore, Cloud Text-to-Speech, Calendar API |
 
-## Google Technologies
-
-Clutch is built Google-first, with Google AI Studio as the primary development platform.
-
-| Technology | Role in Clutch |
-|------------|----------------|
-| Google AI Studio | Primary platform where the agent was designed and iterated |
-| Google Antigravity | Google's agentic development platform, used to build and engineer the application end to end |
-| Google Gemini API | The reasoning core driving the autonomous function-calling loop |
-| Gemini Vision | Reads a photo of a handwritten or whiteboard list into structured tasks |
-| Google Cloud Run | Hosts the live, public, full-stack application |
-| Cloud Build and Artifact Registry | Container build and deploy pipeline |
-| Secret Manager | Stores the Gemini API key securely |
-| Cloud Text-to-Speech | Reads the Clutch Mode rescue plan aloud |
-| Firestore | Cross-device persistence of tasks, plan, and settings |
-| Google Calendar API | Pushes generated time-blocks into the user's calendar |
-| Google Fonts | Typography (Inter and Space Grotesk) |
-
-## Getting Started
-
-**Prerequisites:** Node.js 18 or newer.
+## Local Setup
 
 ```bash
 git clone https://github.com/Paaarthiv/clutch--The-Last-Minute-Life-Saver-.git
 cd clutch--The-Last-Minute-Life-Saver-
 npm install
-# create .env.local (see below)
+```
+
+Create `.env.local`:
+
+```bash
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+GOOGLE_CALENDAR_CLIENT_ID=your_calendar_oauth_client_id
+```
+
+Run locally:
+
+```bash
 npm run dev
 ```
 
 The app runs at `http://localhost:3000`.
 
-## Environment Variables
-
-Create a `.env.local` file in the project root:
-
-```bash
-GEMINI_API_KEY=your_gemini_api_key      # required
-GEMINI_MODEL=gemini-2.5-flash           # optional, defaults to a sensible model
-```
-
-Get a Gemini API key from Google AI Studio. `.env.local` is git-ignored and must never be committed.
-
-Optional runtime variables, used only if the corresponding feature is enabled:
-
-```bash
-GOOGLE_CALENDAR_CLIENT_ID=...           # enables Google Calendar sync
-```
-
 ## Deployment
 
-The application is Cloud Run-ready and currently deployed at the live link above.
+The final deployable link must be hosted on Google Cloud. This project is Cloud Run-ready.
 
 ```bash
 gcloud run deploy clutch \
   --source . \
   --region asia-south1 \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_MODEL=gemini-2.5-flash \
+  --clear-base-image \
+  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,GOOGLE_CALENDAR_CLIENT_ID=YOUR_GOOGLE_CALENDAR_CLIENT_ID \
   --set-secrets GEMINI_API_KEY=gemini-api-key:latest
 ```
 
-The Gemini key is stored in Secret Manager rather than in code. See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full step-by-step guide.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full Cloud Shell guide.
 
-## Project Structure
+## Submission Demo Flow
 
-```
-clutch_app/
-├── server.ts              Express backend: Gemini agent loop, Vision, TTS, Firestore, config
+1. Brain-dump multiple tasks at once, including one fixed-time commitment such as "gym 6 PM to 8 PM".
+2. Show the Agent Activity feed creating and prioritizing tasks.
+3. Show the main Today plan with NOW / NEXT / LATER and the timeline.
+4. Break down a large task such as "Exam prep".
+5. Add the plan to Google Calendar.
+6. Trigger Clutch Mode and show the spoken rescue summary.
+7. Drop or complete a task and show replanning.
+8. Reload the page to show Firestore persistence.
+
+## Repository Structure
+
+```text
+.
+├── server.ts
 ├── src/
-│   ├── AgentContext.tsx   Client agent state, local scheduler (buildSchedule), persistence
+│   ├── AgentContext.tsx
 │   ├── components/
-│   │   └── Dashboard.tsx   Priorities, Timeline, Now, Clutch Mode, Settings, capture
-│   ├── types.ts           Shared task and state types
-│   └── index.css          Theme and animations
-├── SUBMISSION.md          Vibe2Ship submission document
-├── DEPLOYMENT.md          Cloud Run deployment guide
+│   │   ├── Dashboard.tsx
+│   │   ├── IntroScreen.tsx
+│   │   └── ParticleSphere.tsx
+│   ├── lib/
+│   └── types.ts
+├── public/
+├── DEPLOYMENT.md
+├── SUBMISSION.md
+├── Dockerfile
 └── package.json
 ```
 
-## API Reference
+## Security Notes
 
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /api/agent` | Runs the Gemini function-calling loop; accepts text and optional image for Vision |
-| `POST /api/tts` | Returns Cloud Text-to-Speech audio for the Clutch Mode rescue plan |
-| `POST /api/state/save` | Persists client state to Firestore |
-| `GET /api/state/load` | Restores client state from Firestore |
-| `GET /api/config` | Serves runtime configuration such as the Calendar client ID |
-
-## Demo Flow
-
-1. Brain-dump several tasks at once, including a deadline-heavy one and a fixed-time one such as "gym 4–6 PM".
-2. Watch Clutch autonomously create structured tasks in the Agent Activity feed.
-3. Open Priorities to show NOW / NEXT / LATER with the agent's reasoning.
-4. Review the time-blocked schedule and confirm the fixed block landed correctly.
-5. Capture a handwritten list with the photo input and watch Gemini Vision parse it.
-6. Break down a large goal into subtasks.
-7. Activate Clutch Mode for the emergency triage and spoken rescue plan.
-8. Drop a task to trigger the replan recommendation.
+- Gemini API key is loaded from environment variables or Secret Manager.
+- `.env.local` is git-ignored.
+- Cloud Run receives `GEMINI_API_KEY` through Secret Manager, not source code.
+- Basic request size limits, rate limits, and security headers are implemented on the Express server.
+- Calendar access uses Google OAuth in the browser and requests Calendar event scope only.
 
 ## License
 
-Built for the Vibe2Ship hackathon. All rights reserved by the author.
-
----
-
-<div align="center">
-
-Made for <strong>Vibe2Ship</strong> — Problem Statement 1: The Last-Minute Life Saver
-
-</div>
+Built for the Vibe2Ship 2026 hackathon. All rights reserved by the author.
