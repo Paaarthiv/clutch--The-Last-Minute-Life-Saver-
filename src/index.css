@@ -326,3 +326,53 @@ button:disabled {
   .glass-card { transition: border-color 0.2s ease; }
   .glass-card:hover { transform: none; }
 }
+
+/* Vertical "train" marquee for the Built-with-Google cards.
+   The track holds two identical copies; translating by -50% lands copy 2's
+   first card exactly where copy 1's was, so the loop is seamless. */
+@keyframes bwgScroll {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-50%); }
+}
+.bwg-viewport {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%);
+}
+.bwg-track {
+  animation: bwgScroll 32s linear infinite;
+  will-change: transform;
+}
+.bwg-viewport:hover .bwg-track { animation-play-state: paused; }
+
+/* Horizontal "train" variant — track holds two identical copies side by side. */
+@keyframes bwgScrollX {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.bwg-viewport-h {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}
+.bwg-track-h {
+  width: max-content;
+  animation: bwgScrollX 40s linear infinite;
+  will-change: transform;
+}
+.bwg-viewport-h:hover .bwg-track-h { animation-play-state: paused; }
+
+/* Frosted-glass card for the "How it works" steps. No overflow:hidden so the
+   connector arrow can sit outside the card edge. */
+.how-glass {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.42) 100%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 10px 30px rgba(19, 52, 59, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.how-glass:hover {
+  transform: translateY(-3px);
+  border-color: rgba(32, 128, 141, 0.35);
+  box-shadow: 0 16px 42px rgba(19, 52, 59, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}

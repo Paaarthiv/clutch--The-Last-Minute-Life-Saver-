@@ -2,8 +2,7 @@ import React, { useState, useRef } from "react";
 import { useAgent } from "../AgentContext";
 import {
   Mic, ArrowRight, Sparkles, Check, Zap, CalendarClock, Brain,
-  ListChecks, Layers, Volume2, CalendarDays, Cloud, Database, ShieldCheck,
-  ScanLine, RefreshCw, Bell, PenLine, Github, ChevronRight,
+  ListChecks, Layers, Volume2, ShieldCheck, RefreshCw, PenLine, Github, ChevronRight, X,
 } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -102,17 +101,144 @@ export function IntroScreen() {
     { icon: Volume2, title: "Calendar + voice", body: "Push your blocks to Google Calendar and let Clutch read your rescue plan aloud." },
   ];
 
-  // Google technologies powering Clutch.
-  const googleTech = [
-    { icon: Sparkles, name: "Gemini API", body: "The reasoning core — a multi-step function-calling loop." },
-    { icon: ScanLine, name: "Gemini Vision", body: "Reads a photo of a handwritten or whiteboard list." },
-    { icon: Cloud, name: "Cloud Run", body: "Hosts the live, public, full-stack application." },
-    { icon: Database, name: "Firestore", body: "Secure cross-device sync of your tasks and plan." },
-    { icon: CalendarDays, name: "Calendar API", body: "Pushes your time-blocks into your real calendar." },
-    { icon: Volume2, name: "Cloud Text-to-Speech", body: "Reads your Clutch Mode rescue plan aloud." },
+  // Google technology cards (pre-designed images, looped in the vertical marquee).
+  const googleCards = [
+    { src: "/built_with_google/GeminiApi.png?v=clean-5", alt: "Gemini API" },
+    { src: "/built_with_google/GeminiVision.png?v=clean-5", alt: "Gemini Vision" },
+    { src: "/built_with_google/CloudRun.png?v=clean-5", alt: "Cloud Run" },
+    { src: "/built_with_google/CloudFirestore.png?v=clean-5", alt: "Cloud Firestore" },
+    { src: "/built_with_google/GoogleCalendarAPI.png?v=clean-5", alt: "Google Calendar API" },
+    { src: "/built_with_google/CloudText-to-Speach.png?v=clean-5", alt: "Cloud Text-to-Speech" },
   ];
 
   const agentVerbs = ["Interprets intent", "Prioritizes tasks", "Schedules your day", "Breaks down goals", "Re-plans on change"];
+
+  // Overlapping word-pills for the comparison. l/t = % position inside the panel, r = rotation.
+  const clutchPills = [
+    { label: "Prioritized", l: 6, t: 22, r: -6, v: "dark" },
+    { label: "Time-blocked", l: 44, t: 13, r: 4, v: "teal" },
+    { label: "What to do next", l: 16, t: 30, r: -3, v: "white" },
+    { label: "Re-plans for you", l: 50, t: 31, r: 6, v: "blue" },
+    { label: "Clutch Mode", l: 8, t: 51, r: 3, v: "teal" },
+    { label: "Broken into steps", l: 42, t: 53, r: -5, v: "dark" },
+    { label: "Deadlines met", l: 18, t: 72, r: 4, v: "white" },
+    { label: "On track", l: 54, t: 74, r: -4, v: "blue" },
+  ];
+  const chaosPills = [
+    { label: "Forgotten", l: 30, t: 11, r: 3 },
+    { label: "Random", l: 6, t: 22, r: -5 },
+    { label: "Unorganized", l: 44, t: 27, r: 4 },
+    { label: "Overwhelming", l: 12, t: 42, r: -3 },
+    { label: "Where do I start?", l: 42, t: 49, r: 5 },
+    { label: "Procrastinate", l: 6, t: 62, r: -4 },
+    { label: "Missed deadline", l: 38, t: 67, r: 3 },
+    { label: "Last-minute panic", l: 14, t: 80, r: -5 },
+  ];
+  const pillVariant: Record<string, string> = {
+    dark: "bg-[#13343B] text-white",
+    teal: "bg-[#20808D] text-white",
+    blue: "bg-[#2AA7B5] text-white",
+    white: "bg-white text-[#13343B] border border-[#E6E3DC]",
+  };
+
+  // A small, theme-matched mini-preview for each "How it works" step.
+  const stepMock = (i: number) => {
+    switch (i) {
+      case 0: // Brain-dump input
+        return (
+          <div className="rounded-xl bg-[#FAFAF7] border border-[#EFEBE3] p-3 flex items-center gap-2">
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="text-[11px] text-[#13343B] truncate">Review notes for exam</div>
+              <div className="text-[11px] text-[#5B6B6E] truncate">Reply to recruiter email<span className="inline-block align-middle ml-0.5 w-px h-3 bg-[#20808D] animate-pulse" /></div>
+            </div>
+            <div className="w-7 h-7 rounded-full bg-[#20808D] flex items-center justify-center shrink-0"><Mic className="w-3.5 h-3.5 text-white" /></div>
+          </div>
+        );
+      case 1: // Extracted tasks
+        return (
+          <div className="space-y-1.5">
+            {[["Reply to recruiter", "Today", "30m"], ["DBMS assignment", "May 15", "1.5h"], ["Interview prep", "Tmrw", "2h"]].map(([t, d, m]) => (
+              <div key={t} className="flex items-center gap-2 rounded-lg bg-[#FAFAF7] border border-[#EFEBE3] px-2.5 py-1.5">
+                <div className="w-3.5 h-3.5 rounded border border-[#C9D4D4] shrink-0" />
+                <div className="flex-1 text-[11px] text-[#13343B] truncate">{t}</div>
+                <span className="text-[10px] text-[#9AA7A9] shrink-0">{d}</span>
+                <span className="text-[10px] bg-[#E8F2F1] text-[#13565F] rounded-full px-1.5 py-0.5 shrink-0">{m}</span>
+              </div>
+            ))}
+          </div>
+        );
+      case 2: // Prioritize NOW / NEXT / LATER
+        return (
+          <div className="space-y-1.5">
+            {[["NOW", "#20808D", "Reply to recruiter", "due today"], ["NEXT", "#E0A23B", "DBMS assignment", "moves grade"], ["LATER", "#C9D4D4", "Interview prep", "not urgent"]].map(([tag, color, t, reason]) => (
+              <div key={tag} className="flex items-center gap-2 rounded-lg bg-[#FAFAF7] border border-[#EFEBE3] px-2.5 py-1.5">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                <span className="text-[10px] font-bold w-9 shrink-0" style={{ color }}>{tag}</span>
+                <span className="flex-1 text-[11px] text-[#13343B] truncate">{t}</span>
+                <span className="text-[10px] text-[#9AA7A9] truncate hidden sm:block">{reason}</span>
+              </div>
+            ))}
+          </div>
+        );
+      case 3: // Time-block timeline
+        return (
+          <div className="rounded-xl bg-[#FAFAF7] border border-[#EFEBE3] p-3 flex gap-2.5">
+            <div className="flex flex-col justify-between text-[10px] text-[#9AA7A9] py-0.5">
+              <span>9 AM</span><span>10 AM</span><span>11 AM</span>
+            </div>
+            <div className="flex-1 space-y-1.5">
+              <div className="rounded-md bg-[#E8F2F1] border border-[#20808D]/20 px-2 py-1.5">
+                <div className="text-[10px] font-semibold text-[#13343B]">Deep work</div>
+                <div className="text-[9px] text-[#5B6B6E]">9:00 – 10:00</div>
+              </div>
+              <div className="rounded-md bg-white border border-[#EFEBE3] px-2 py-1.5">
+                <div className="text-[10px] font-semibold text-[#13343B]">Team sync</div>
+                <div className="text-[9px] text-[#5B6B6E]">10:15 – 11:00</div>
+              </div>
+            </div>
+          </div>
+        );
+      case 4: // Goal breakdown
+        return (
+          <div className="rounded-xl bg-[#FAFAF7] border border-[#EFEBE3] p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Layers className="w-3.5 h-3.5 text-[#20808D]" />
+              <span className="text-[11px] font-semibold text-[#13343B]">Learn Git</span>
+              <span className="ml-auto text-[10px] bg-[#E8F2F1] text-[#13565F] rounded-full px-1.5 py-0.5">Goal</span>
+            </div>
+            <div className="space-y-1 pl-1">
+              {[["Install & configure", "30m"], ["Branches & merges", "1h"], ["Push to GitHub", "30m"]].map(([t, m]) => (
+                <div key={t} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded border border-[#C9D4D4] shrink-0" />
+                  <span className="flex-1 text-[11px] text-[#13343B] truncate">{t}</span>
+                  <span className="text-[10px] text-[#9AA7A9]">{m}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      default: // 5 — Re-plan keep / move / drop
+        return (
+          <div className="rounded-xl bg-[#FAFAF7] border border-[#EFEBE3] p-3">
+            <div className="text-[11px] font-semibold text-[#13343B] mb-2">Plan updated</div>
+            <div className="space-y-1.5">
+              {[
+                { tag: "Keep", color: "#20808D", t: "Client call", note: "on track", Ico: Check },
+                { tag: "Move", color: "#E0A23B", t: "Investor update", note: "to Friday", Ico: ArrowRight },
+                { tag: "Drop", color: "#C2685E", t: "Blog post", note: "lower impact", Ico: X },
+              ].map(({ tag, color, t, note, Ico }) => (
+                <div key={tag} className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ background: color }}><Ico className="w-2.5 h-2.5 text-white" /></span>
+                  <span className="text-[10px] font-semibold w-9 shrink-0" style={{ color }}>{tag}</span>
+                  <span className="flex-1 text-[11px] text-[#13343B] truncate">{t}</span>
+                  <span className="text-[10px] text-[#9AA7A9] truncate hidden sm:block">{note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+    }
+  };
 
   return (
     <div onMouseMove={onPageMove} className="relative z-10 min-h-screen w-full bg-[#F0EEE7] text-[#13343B] overflow-x-hidden" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -172,18 +298,6 @@ export function IntroScreen() {
           <button onClick={dismissIntro} className="mt-3 text-sm text-[#5B6B6E] hover:text-[#20808D] transition-colors inline-flex items-center gap-1">
             or just open the dashboard <ArrowRight className="w-3.5 h-3.5" />
           </button>
-
-          {/* Powered-by strip (honest trust signal — replaces the fake rating) */}
-          <div className="mt-9">
-            <div className="text-[11px] font-semibold uppercase tracking-widest text-[#9AA7A9] mb-3">Powered by Google</div>
-            <div className="flex flex-wrap items-center gap-2">
-              {["Gemini", "Cloud Run", "Firestore", "Calendar", "Text-to-Speech"].map((t) => (
-                <span key={t} className="inline-flex items-center gap-1.5 bg-white border border-[#E6E3DC] rounded-full px-3 py-1.5 text-[12px] font-medium text-[#13565F]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#20808D]" /> {t}
-                </span>
-              ))}
-            </div>
-          </div>
         </motion.div>
 
         {/* HERO VISUAL */}
@@ -256,53 +370,65 @@ export function IntroScreen() {
           <p className="mt-4 text-[#5B6B6E] leading-relaxed">Students and professionals miss deadlines not because they forget — but because nothing turns the chaos in their head into a concrete next move. Clutch does.</p>
         </div>
         <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto">
-          <div className="bg-white border border-[#E6E3DC] rounded-2xl p-6">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-[#F3F1EA] flex items-center justify-center"><Bell className="w-[18px] h-[18px] text-[#9AA7A9]" /></div>
-              <div className="font-display text-lg font-bold text-[#7A8688]">A normal reminder</div>
+          {/* The Clutch way — vibrant, overlapping action words */}
+          <div className="relative rounded-3xl bg-[#E8F2F1] border border-[#20808D]/15 h-[340px] overflow-hidden">
+            <div className="absolute top-5 left-6 z-10 text-[15px] font-semibold text-[#5B6B6E]">
+              The <span className="text-[#20808D] font-bold">Clutch</span> way
             </div>
-            <ul className="space-y-2.5">
-              {["Tells you what you forgot", "Buzzes once — then you swipe it away", "Leaves you guessing what to do first"].map((t) => (
-                <li key={t} className="flex items-start gap-2.5 text-[14px] text-[#7A8688]">
-                  <span className="mt-2 w-1.5 h-1.5 rounded-full bg-[#C9D4D4] shrink-0" /> {t}
-                </li>
-              ))}
-            </ul>
+            {clutchPills.map((p) => (
+              <span
+                key={p.label}
+                className={`absolute rounded-full px-4 py-2 text-[13px] font-semibold whitespace-nowrap shadow-[0_8px_20px_rgba(19,52,59,0.10)] ${pillVariant[p.v]}`}
+                style={{ left: `${p.l}%`, top: `${p.t}%`, transform: `rotate(${p.r}deg)` }}
+              >
+                {p.label}
+              </span>
+            ))}
           </div>
-          <div className="relative bg-white border border-[#20808D]/30 rounded-2xl p-6 shadow-[0_16px_40px_rgba(32,128,141,0.10)]">
-            <div className="absolute inset-x-0 -top-px h-1 rounded-t-2xl bg-gradient-to-r from-[#20808D] to-[#2AA7B5]" />
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-[#E8F2F1] flex items-center justify-center"><Zap className="w-[18px] h-[18px] text-[#20808D]" /></div>
-              <div className="font-display text-lg font-bold text-[#13343B]">Clutch</div>
+
+          {/* Without Clutch — faded, greyed-out chaos */}
+          <div className="relative rounded-3xl bg-[#F3F1EA] border border-[#E6E3DC] h-[340px] overflow-hidden">
+            <div className="absolute top-5 left-6 z-10 text-[15px] font-semibold text-[#9AA7A9]">
+              Without <span className="text-[#7A8688] font-bold">Clutch</span>
             </div>
-            <ul className="space-y-2.5">
-              {["Tells you exactly what to do next", "Builds the actual time-blocked plan", "Re-plans the moment you fall behind"].map((t) => (
-                <li key={t} className="flex items-start gap-2.5 text-[14px] text-[#13343B]">
-                  <Check className="mt-0.5 w-4 h-4 text-[#20808D] shrink-0" /> {t}
-                </li>
-              ))}
-            </ul>
+            {chaosPills.map((p) => (
+              <span
+                key={p.label}
+                className="absolute rounded-full px-4 py-2 text-[13px] font-medium whitespace-nowrap bg-[#E7E4DB] text-[#A2A89F] border border-black/[0.04]"
+                style={{ left: `${p.l}%`, top: `${p.t}%`, transform: `rotate(${p.r}deg)`, opacity: 0.85 }}
+              >
+                {p.label}
+              </span>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* HOW IT WORKS — from chaos to plan */}
+      {/* HOW IT WORKS — from chaos to plan, with live mini-previews */}
       <section id="how" className="relative z-10 max-w-6xl mx-auto px-6 pb-20 scroll-mt-24">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <div className="text-[#20808D] text-[13px] font-semibold uppercase tracking-widest mb-3">How it works</div>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-[#13343B] tracking-tight">From chaos to a plan, in one loop</h2>
+          <p className="mt-4 text-[#5B6B6E] leading-relaxed">Six steps the agent runs for you — from a messy brain-dump to a schedule that re-plans itself.</p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {steps.map((s, i) => {
             const Icon = s.icon;
             return (
-              <div key={i} className="relative bg-white border border-[#E6E3DC] rounded-2xl p-6 hover:border-[#20808D]/40 transition-colors">
-                <div className="flex items-center justify-between mb-4">
+              <div key={i} className="how-glass relative flex flex-col rounded-2xl p-5" style={{ zIndex: steps.length - i }}>
+                <div className="flex items-start justify-between mb-3">
                   <div className="w-11 h-11 rounded-xl bg-[#E8F2F1] flex items-center justify-center"><Icon className="w-5 h-5 text-[#20808D]" /></div>
-                  <span className="font-display text-2xl font-bold text-[#E1E8E7]">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="font-display text-2xl font-bold text-[#13343B]/15">{String(i + 1).padStart(2, "0")}</span>
                 </div>
-                <div className="font-display text-lg font-bold text-[#13343B] mb-2">{s.title}</div>
-                <p className="text-[#5B6B6E] text-[14px] leading-relaxed">{s.body}</p>
+                <div className="font-display text-lg font-bold text-[#13343B] mb-1.5">{s.title}</div>
+                <p className="text-[#5B6B6E] text-[13px] leading-relaxed mb-4">{s.body}</p>
+                <div className="mt-auto">{stepMock(i)}</div>
+                {i % 3 !== 2 && (
+                  <svg className="hidden lg:block pointer-events-none absolute top-1/2 -right-[30px] -translate-y-1/2 z-30" width="38" height="22" viewBox="0 0 38 22" fill="none" aria-hidden="true">
+                    <path d="M2 13 C 11 3, 25 3, 34 10" stroke="#20808D" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M28 6.5 L 35 10 L 29 15" stroke="#20808D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
               </div>
             );
           })}
@@ -340,12 +466,14 @@ export function IntroScreen() {
           <div className="text-[#20808D] text-[13px] font-semibold uppercase tracking-widest mb-3">Everything Clutch does</div>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-[#13343B] tracking-tight">An agent that actually does the planning</h2>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
           {features.map((f, i) => {
             const Icon = f.icon;
             return (
-              <div key={i} className="bg-white border border-[#E6E3DC] rounded-2xl p-6 hover:border-[#20808D]/40 hover:shadow-[0_16px_40px_rgba(19,52,59,0.08)] transition-all">
-                <div className="w-11 h-11 rounded-xl bg-[#E8F2F1] flex items-center justify-center mb-4"><Icon className="w-5 h-5 text-[#20808D]" /></div>
+              <div key={i} className="group">
+                <div className="w-12 h-12 rounded-xl bg-[#E8F2F1] flex items-center justify-center mb-4 group-hover:bg-[#20808D] transition-colors">
+                  <Icon className="w-5 h-5 text-[#20808D] group-hover:text-white transition-colors" />
+                </div>
                 <div className="font-display text-lg font-bold text-[#13343B] mb-2">{f.title}</div>
                 <p className="text-[#5B6B6E] text-[14px] leading-relaxed">{f.body}</p>
               </div>
@@ -354,26 +482,29 @@ export function IntroScreen() {
         </div>
       </section>
 
-      {/* GOOGLE TECHNOLOGIES */}
-      <section id="tech" className="relative z-10 max-w-6xl mx-auto px-6 pb-20 scroll-mt-24">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <div className="text-[#20808D] text-[13px] font-semibold uppercase tracking-widest mb-3">Built with Google</div>
+      {/* GOOGLE TECHNOLOGIES — horizontal "train" marquee of the official cards */}
+      <section id="tech" className="relative z-10 px-6 pb-20 scroll-mt-24">
+        <div className="max-w-2xl mx-auto text-center mb-12">
+          <div className="text-[#20808D] text-[13px] font-semibold uppercase tracking-widest mb-3">Powered by Google</div>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-[#13343B] tracking-tight">Google-first, end to end</h2>
-          <p className="mt-4 text-[#5B6B6E] leading-relaxed">From reasoning to hosting to voice — Clutch is built on the Google stack, with Gemini at its core.</p>
+          <p className="mt-4 max-w-2xl mx-auto text-[#5B6B6E] leading-relaxed">
+            From reasoning to hosting to voice — six Google products working together as one agent, with Gemini at the core.
+          </p>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {googleTech.map((g, i) => {
-            const Icon = g.icon;
-            return (
-              <div key={i} className="flex items-start gap-4 bg-white border border-[#E6E3DC] rounded-2xl p-5 hover:border-[#20808D]/40 transition-colors">
-                <div className="w-11 h-11 rounded-xl bg-[#E8F2F1] flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-[#20808D]" /></div>
-                <div>
-                  <div className="font-display text-[15px] font-bold text-[#13343B] mb-1">{g.name}</div>
-                  <p className="text-[#5B6B6E] text-[13px] leading-relaxed">{g.body}</p>
-                </div>
-              </div>
-            );
-          })}
+
+        {/* Two identical copies scroll left forever; -50% lands copy 2 where copy 1 was. */}
+        <div className="bwg-viewport-h relative overflow-hidden">
+          <div className="bwg-track-h flex">
+            {[...googleCards, ...googleCards].map((c, i) => (
+              <img
+                key={i}
+                src={c.src}
+                alt={c.alt}
+                draggable={false}
+                className="w-[340px] h-auto mr-4 shrink-0 select-none pointer-events-none"
+              />
+            ))}
+          </div>
         </div>
       </section>
 

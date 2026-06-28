@@ -834,9 +834,19 @@ Use the EXACT task ids from the current state. Do not create, prioritize, schedu
   // even where TTS isn't configured (the client falls back to the browser voice).
   let ttsClient: any = null;
   let ttsTried = false;
+  const canUseCloudTts = () => Boolean(
+    process.env.K_SERVICE ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT
+  );
   const getTtsClient = async () => {
     if (ttsTried) return ttsClient;
     ttsTried = true;
+    if (!canUseCloudTts()) {
+      console.warn("[Clutch] Cloud TTS skipped locally: no Google credentials detected.");
+      return null;
+    }
     try {
       const mod: any = await import("@google-cloud/text-to-speech");
       ttsClient = new mod.TextToSpeechClient();
