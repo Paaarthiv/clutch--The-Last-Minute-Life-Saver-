@@ -263,7 +263,15 @@ async function fileToCompressedImage(file: File): Promise<{ mimeType: string; da
   return { mimeType: "image/jpeg", data: out.split(",")[1] };
 }
 
-function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement> }) {
+function PrioritiesColumn({
+  inputRef,
+  activityCollapsed,
+  toggleActivity,
+}: {
+  inputRef: React.RefObject<HTMLTextAreaElement>;
+  activityCollapsed: boolean;
+  toggleActivity: () => void;
+}) {
   const { tasks, isThinking, executeAgentAction, runRescue, settings } = useAgent();
   const hasTasks = tasks.some((t) => t.status === "idle");
 
@@ -457,6 +465,14 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
         </div>
       )}
       </div>
+      <button
+        type="button"
+        onClick={toggleActivity}
+        title={activityCollapsed ? "Show agent activity" : "Hide agent activity"}
+        className="2xl:hidden absolute bottom-5 right-5 z-30 w-11 h-9 rounded-xl bg-white/90 border border-[#E6E3DC] text-[#5B6B6E] shadow-[0_10px_24px_rgba(19,52,59,0.10)] flex items-center justify-center hover:text-[#13343B] hover:border-[#20808D]/40 transition-colors"
+      >
+        {activityCollapsed ? <ChevronsLeft className="w-4 h-4" /> : <ChevronsRight className="w-4 h-4" />}
+      </button>
     </div>
   );
 }
@@ -464,13 +480,22 @@ function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextArea
 // The Today board keeps chat + plan primary; activity only becomes a side column
 // on very wide screens so expanding it cannot squeeze the plan on laptops.
 function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement> }) {
+  const [activityCollapsed, setActivityCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem("clutch_activity_collapsed") === "true"; } catch (e) { return false; }
+  });
+  const toggleActivity = () => setActivityCollapsed((collapsed) => {
+    const next = !collapsed;
+    try { localStorage.setItem("clutch_activity_collapsed", String(next)); } catch (e) {}
+    return next;
+  });
+
   return (
     <div className="flex-1 flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-6 px-4 md:px-8 py-6 h-full overflow-y-auto 2xl:overflow-hidden custom-scrollbar">
-      <PrioritiesColumn inputRef={inputRef} />
+      <PrioritiesColumn inputRef={inputRef} activityCollapsed={activityCollapsed} toggleActivity={toggleActivity} />
       <div className="w-full xl:flex-1 xl:min-w-[420px] 2xl:w-[560px] 2xl:flex-none flex flex-col min-h-0 xl:h-full">
         <TimelineColumn />
       </div>
-      <AgentActivityFeed />
+      <AgentActivityFeed collapsed={activityCollapsed} toggleCollapsed={toggleActivity} />
     </div>
   );
 }
@@ -829,7 +854,7 @@ function TimelineColumn() {
   );
 }
 
-function AgentActivityFeed() {
+function AgentActivityFeed({ collapsed, toggleCollapsed }: { collapsed: boolean; toggleCollapsed: () => void }) {
   const { activityFeed, isThinking } = useAgent();
 
   // Only resizable on very wide layouts, where the feed is a true side column.
@@ -883,15 +908,6 @@ function AgentActivityFeed() {
     e.preventDefault();
   };
 
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try { return localStorage.getItem("clutch_activity_collapsed") === "true"; } catch (e) { return false; }
-  });
-  const toggleCollapsed = () => setCollapsed((c) => {
-    const v = !c;
-    try { localStorage.setItem("clutch_activity_collapsed", String(v)); } catch (e) {}
-    return v;
-  });
-
   // Collapsed + wide: render a slim rail with an expand button.
   if (isWide && collapsed) {
     return (
@@ -908,17 +924,18 @@ function AgentActivityFeed() {
       </div>
     );
   }
+  if (!isWide && collapsed) return null;
 
   return (
     <div className="w-full 2xl:flex-shrink-0 flex 2xl:pl-4 2xl:border-l 2xl:border-[#EDEAE2]" style={isWide && !collapsed ? { width } : undefined}>
       {/* Content column */}
-      <div className="flex-1 min-w-0 flex flex-col gap-4 2xl:h-full">
+      <div className="w-full max-w-[420px] 2xl:max-w-none flex-1 min-w-0 flex flex-col gap-4 2xl:h-full">
         <div className="flex items-center justify-between shrink-0">
           <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Agent Activity</div>
           <button
             onClick={toggleCollapsed}
             title={collapsed ? "Show activity" : "Collapse activity"}
-            className="w-7 h-7 -mr-1 rounded-lg flex items-center justify-center text-[#9AA7A9] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors"
+            className="hidden 2xl:flex w-7 h-7 -mr-1 rounded-lg items-center justify-center text-[#9AA7A9] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors"
           >
             {collapsed ? <ChevronsLeft className="w-4 h-4" /> : <ChevronsRight className="w-4 h-4" />}
           </button>
