@@ -31,12 +31,25 @@
   --pplx-border: #E6E3DC;
 }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
 
 body {
   @apply bg-canvas-base text-text-primary font-sans antialiased overflow-x-hidden;
   margin: 0;
   padding: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Tailwind v4 no longer defaults buttons to a pointer — restore it for all enabled controls */

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAgent } from "../AgentContext";
 import { PrioritizedTask, ScheduledBlock } from "../types";
-import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronDown, Check, Zap, BatteryLow, ArrowRight, ImagePlus, Volume2 } from "lucide-react";
+import { Mic, CheckCircle2, Circle, Clock, LayoutDashboard, BrainCircuit, Calendar, CheckSquare, Inbox, Folder, Archive, HelpCircle, LogOut, Plus, Minus, Maximize2, User, Loader2, Sparkles, BarChart3, Settings as SettingsIcon, RotateCcw, Trash2, ChevronsLeft, ChevronsRight, ChevronsDown, ChevronDown, Check, Zap, BatteryLow, ArrowRight, ImagePlus, Volume2 } from "lucide-react";
 import { motion } from "motion/react";
 import { format } from "date-fns";
 import clsx from "clsx";
@@ -350,7 +350,7 @@ function PrioritiesColumn({
   }, []);
 
   return (
-    <div ref={columnRef} className="w-full xl:flex-1 xl:min-w-[360px] xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-4 py-10">
+    <div ref={columnRef} className="w-full min-w-0 xl:flex-1 xl:min-w-[360px] xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-3 sm:px-4 py-8 sm:py-10">
       {/* Decorative task-pill cloud behind the command bar (hidden when the column is narrow). */}
       {showPills && (
       <div className="absolute inset-x-0 top-10 bottom-0 pointer-events-none select-none opacity-70">
@@ -469,9 +469,10 @@ function PrioritiesColumn({
         type="button"
         onClick={toggleActivity}
         title={activityCollapsed ? "Show agent activity" : "Hide agent activity"}
-        className="2xl:hidden absolute bottom-5 right-5 z-30 w-11 h-9 rounded-xl bg-white/90 border border-[#E6E3DC] text-[#5B6B6E] shadow-[0_10px_24px_rgba(19,52,59,0.10)] flex items-center justify-center hover:text-[#13343B] hover:border-[#20808D]/40 transition-colors"
+        className="2xl:hidden absolute bottom-4 right-3 sm:bottom-5 sm:right-5 z-30 h-9 rounded-xl bg-white/90 border border-[#E6E3DC] text-[#5B6B6E] shadow-[0_10px_24px_rgba(19,52,59,0.10)] flex items-center gap-2 px-3 hover:text-[#13343B] hover:border-[#20808D]/40 transition-colors"
       >
-        {activityCollapsed ? <ChevronsLeft className="w-4 h-4" /> : <ChevronsRight className="w-4 h-4" />}
+        <span className="text-[10px] uppercase tracking-widest font-bold">Agent Activity</span>
+        <ChevronsDown className="w-4 h-4" />
       </button>
     </div>
   );
@@ -490,9 +491,9 @@ function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElemen
   });
 
   return (
-    <div className="flex-1 flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-6 px-4 md:px-8 py-6 h-full overflow-y-auto 2xl:overflow-hidden custom-scrollbar">
+    <div className="flex-1 min-w-0 flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-4 lg:gap-6 px-3 sm:px-4 md:px-8 py-4 md:py-6 h-full overflow-y-auto overflow-x-hidden 2xl:overflow-hidden custom-scrollbar">
       <PrioritiesColumn inputRef={inputRef} activityCollapsed={activityCollapsed} toggleActivity={toggleActivity} />
-      <div className="w-full xl:flex-1 xl:min-w-[420px] 2xl:w-[560px] 2xl:flex-none flex flex-col min-h-0 xl:h-full">
+      <div className="w-full min-w-0 xl:flex-1 xl:min-w-[420px] 2xl:w-[560px] 2xl:flex-none flex flex-col min-h-0 xl:h-full">
         <TimelineColumn />
       </div>
       <AgentActivityFeed collapsed={activityCollapsed} toggleCollapsed={toggleActivity} />
@@ -695,7 +696,7 @@ function TimelineColumn() {
   const windowNow = windowEnd > 24 && nowDec < windowStart ? nowDec + 24 : nowDec;
 
   return (
-    <div className="w-full xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[420px] xl:min-h-0">
+    <div className="w-full min-w-0 xl:flex-1 glass-card flex flex-col relative shrink-0 overflow-hidden min-h-[420px] xl:min-h-0">
       <div className="p-4 border-b border-[#E6E3DC] bg-black/[0.025] shrink-0 z-10">
         <div className="flex flex-col gap-3">
           <div className="min-w-0">
@@ -745,7 +746,7 @@ function TimelineColumn() {
         )}
       </div>
 
-      <div className="timeline-scroll flex-1 overflow-y-auto w-full custom-scrollbar p-4">
+      <div className="timeline-scroll flex-1 overflow-y-auto overflow-x-hidden w-full custom-scrollbar p-3 sm:p-4">
         <NowCard />
         {blocks.length === 0 ? (
           <div className="h-full min-h-[360px] flex flex-col items-center justify-center text-center">
@@ -767,10 +768,10 @@ function TimelineColumn() {
               return (
                 <div
                   key={block.taskId + idx}
-                  className="timeline-row flex gap-3"
+                  className="timeline-row flex gap-2 sm:gap-3 min-w-0"
                 >
                   {/* Time gutter */}
-                  <div className="w-16 shrink-0 text-right pt-2.5">
+                  <div className="w-12 sm:w-16 shrink-0 text-right pt-2.5">
                     <div className={clsx("text-[11px] font-bold tabular-nums leading-none", isPast ? "text-[#9AA7A9]" : "text-[#13343B]")}>{fmt12(start)}</div>
                     <div className="text-[10px] text-[#9AA7A9] tabular-nums mt-1 leading-none">{fmt12(end)}</div>
                   </div>
@@ -1145,19 +1146,19 @@ function LeftSidebar({ activeView, setActiveView, onNewTask }: { activeView: Vie
   });
 
   return (
-    <div className={clsx("flex-shrink-0 border-r border-[#EDEAE2] h-full flex flex-col bg-white overflow-hidden transition-[width] duration-300 ease-in-out", collapsed ? "w-[76px]" : "w-64")}>
+    <div className={clsx("flex-shrink-0 border-r border-[#EDEAE2] h-full flex flex-col bg-white overflow-hidden transition-[width] duration-300 ease-in-out", collapsed ? "w-[60px] sm:w-[76px]" : "w-[60px] sm:w-[76px] md:w-64")}>
       {/* Brand + toggle (logo stays anchored at top) */}
-      <div className={clsx("h-[72px] shrink-0 flex items-center", collapsed ? "justify-center px-2" : "px-5")}>
+      <div className={clsx("h-[64px] md:h-[72px] shrink-0 flex items-center", collapsed ? "justify-center px-2" : "justify-center px-2 md:justify-start md:px-5")}>
         <button onClick={goHome} title="Back to home" className="cursor-pointer group shrink-0">
-          <ClutchLogo className={clsx("origin-center transition-all duration-300 group-hover:text-[#20808D]", collapsed ? "h-[18px]" : "h-7")} />
+          <ClutchLogo className={clsx("origin-center transition-all duration-300 group-hover:text-[#20808D]", collapsed ? "h-[18px]" : "h-[18px] md:h-7")} />
         </button>
       </div>
 
       <div className="pb-2" />
 
       {/* Nav */}
-      <div className="px-4 pb-1 h-[22px] text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9AA7A9] overflow-hidden whitespace-nowrap">{!collapsed && "Workspace"}</div>
-      <div className={clsx("py-2 space-y-1 flex-1", collapsed ? "px-2" : "px-3")}>
+      <div className="hidden md:block px-4 pb-1 h-[22px] text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9AA7A9] overflow-hidden whitespace-nowrap">{!collapsed && "Workspace"}</div>
+      <div className={clsx("py-2 space-y-1 flex-1", collapsed ? "px-2" : "px-2 md:px-3")}>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = activeView === item.id;
@@ -1168,13 +1169,13 @@ function LeftSidebar({ activeView, setActiveView, onNewTask }: { activeView: Vie
               title={item.label}
               className={clsx(
                 "w-full flex items-center py-2.5 text-sm font-medium rounded-xl transition-colors",
-                collapsed ? "justify-center" : "px-3.5 gap-3",
+                collapsed ? "justify-center" : "justify-center md:justify-start md:px-3.5 md:gap-3",
                 active
                   ? "bg-[#13343B] text-white shadow-[0_6px_16px_rgba(19,52,59,0.18)]"
                   : "text-[#5B6B6E] hover:bg-[#F2F0EA] hover:text-[#13343B]"
               )}>
               <Icon className={clsx("w-[18px] h-[18px] shrink-0", active ? "text-white" : "text-[#9AA7A9]")} />
-              {!collapsed && item.label}
+              {!collapsed && <span className="hidden md:inline truncate">{item.label}</span>}
             </button>
           );
         })}
@@ -1183,7 +1184,7 @@ function LeftSidebar({ activeView, setActiveView, onNewTask }: { activeView: Vie
           onClick={toggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={clsx(
-            "w-full flex items-center py-2.5 text-sm font-medium rounded-xl text-[#5B6B6E] hover:bg-[#F2F0EA] hover:text-[#13343B] transition-colors",
+            "hidden md:flex w-full items-center py-2.5 text-sm font-medium rounded-xl text-[#5B6B6E] hover:bg-[#F2F0EA] hover:text-[#13343B] transition-colors",
             collapsed ? "justify-center" : "px-3.5 gap-3"
           )}>
           {collapsed ? <ChevronsRight className="w-[18px] h-[18px] shrink-0" /> : (<><ChevronsLeft className="w-[18px] h-[18px] shrink-0" /> Collapse</>)}
@@ -1191,11 +1192,11 @@ function LeftSidebar({ activeView, setActiveView, onNewTask }: { activeView: Vie
       </div>
 
       {/* Profile */}
-      <div className={clsx("border-t border-[#EDEAE2]", collapsed ? "p-2" : "p-3")}>
-        <div className={clsx("flex items-center rounded-xl transition-colors", collapsed ? "justify-center" : "gap-3 p-2 hover:bg-[#F2F0EA]")}>
+      <div className={clsx("border-t border-[#EDEAE2]", collapsed ? "p-2" : "p-2 md:p-3")}>
+        <div className={clsx("flex items-center rounded-xl transition-colors", collapsed ? "justify-center" : "justify-center md:justify-start md:gap-3 md:p-2 md:hover:bg-[#F2F0EA]")}>
           <div className="w-9 h-9 rounded-full bg-[#E8F2F1] flex items-center justify-center text-[#13565F] font-semibold text-sm shrink-0">P</div>
           {!collapsed && (
-            <div className="min-w-0">
+            <div className="hidden md:block min-w-0">
               <div className="text-[13px] font-semibold text-[#13343B] truncate">amparthiv94</div>
               <div className="text-[11px] text-[#9AA7A9]">Pro Plan</div>
             </div>
@@ -1668,8 +1669,8 @@ function CalendarView() {
   const laid = layoutBlocks(schedule, startH, endH); // packs true overlaps into columns
 
   return (
-    <main className="flex-1 overflow-auto custom-scrollbar px-4 md:px-8 py-6">
-      <div className="min-w-[760px] glass-card overflow-hidden">
+    <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-3 sm:px-4 md:px-8 py-4 md:py-6">
+      <div className="w-full min-w-0 glass-card overflow-hidden">
         {/* Day header — sits flush above the grid (no gap) */}
         <div className="grid border-b border-[#ECE9E1]" style={{ gridTemplateColumns: gridTpl }}>
           <div className="bg-black/[0.015]" />
@@ -1829,19 +1830,19 @@ function SettingsView() {
   const hourLabel = (h: number) => (h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`);
 
   return (
-    <main className="flex-1 overflow-y-auto custom-scrollbar px-4 md:px-8 py-6">
+    <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar px-3 sm:px-4 md:px-8 py-4 md:py-6">
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="glass-card p-6 space-y-4">
           <div>
             <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Working hours</div>
             <p className="text-[12px] text-[#5B6B6E] mt-1">The window Clutch uses when planning your calendar.</p>
           </div>
-          <div className="flex items-start gap-4">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row items-start gap-4">
+            <div className="w-full sm:flex-1">
               <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">Start</label>
               <Dropdown value={settings.workStart} onChange={(v) => updateSettings({ workStart: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
             </div>
-            <div className="flex-1">
+            <div className="w-full sm:flex-1">
               <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">End</label>
               <Dropdown value={settings.workEnd} onChange={(v) => updateSettings({ workEnd: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
             </div>
@@ -1850,12 +1851,12 @@ function SettingsView() {
           <div className="pt-2 border-t border-[#ECE9E1]">
             <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Peak energy window</div>
             <p className="text-[12px] text-[#5B6B6E] mt-1 mb-3">When you focus best. Clutch schedules deep-focus tasks here and busywork outside it.</p>
-            <div className="flex items-start gap-4">
-              <div className="flex-1">
+            <div className="flex flex-col sm:flex-row items-start gap-4">
+              <div className="w-full sm:flex-1">
                 <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">Peak start</label>
                 <Dropdown value={settings.peakStart} onChange={(v) => updateSettings({ peakStart: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
               </div>
-              <div className="flex-1">
+              <div className="w-full sm:flex-1">
                 <label className="text-[10px] uppercase tracking-widest text-[#5B6B6E]">Peak end</label>
                 <Dropdown value={settings.peakEnd} onChange={(v) => updateSettings({ peakEnd: v })} options={hours.map((h) => ({ value: h, label: hourLabel(h) }))} />
               </div>
@@ -1863,7 +1864,7 @@ function SettingsView() {
           </div>
         </div>
 
-        <div className="glass-card p-6 flex items-center justify-between">
+        <div className="glass-card p-5 sm:p-6 flex items-start sm:items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-[#13343B]">Voice input — dictate your tasks</div>
             <div className="text-[12px] text-[#5B6B6E]">Show the microphone for hands-free capture.</div>
@@ -1874,7 +1875,7 @@ function SettingsView() {
           </button>
         </div>
 
-        <div className="glass-card p-6 flex items-center justify-between">
+        <div className="glass-card p-5 sm:p-6 flex items-start sm:items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-[#13343B]">Agent voice — speak responses aloud</div>
             <div className="text-[12px] text-[#5B6B6E]">Let Clutch read plan summaries, replans, and Clutch Mode out loud.</div>
@@ -1919,14 +1920,14 @@ export function Dashboard() {
   };
 
   return (
-    <div className="h-screen w-screen relative z-10 flex overflow-hidden">
+    <div className="h-screen w-screen max-w-full relative z-10 flex overflow-hidden">
       <LeftSidebar activeView={activeView} setActiveView={setActiveView} onNewTask={handleNewTask} />
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="flex items-center justify-between px-4 md:px-8 py-6 z-10 border-b border-[#E6E3DC] shrink-0">
-          <div className="text-xl font-display opacity-80 flex items-center gap-2 capitalize">
+        <header className="flex items-center justify-between gap-3 px-3 sm:px-4 md:px-8 py-4 md:py-6 z-10 border-b border-[#E6E3DC] shrink-0 min-w-0">
+          <div className="min-w-0 text-lg sm:text-xl font-display opacity-80 flex items-center gap-2 capitalize truncate">
             {activeView === 'today' ? (
-              <>Today <span className="opacity-40">•</span> <span className="text-[#5B6B6E] text-sm uppercase tracking-widest">{format(new Date(), "EEEE, MMM do")}</span></>
+              <>Today <span className="opacity-40 hidden sm:inline">•</span> <span className="hidden sm:inline text-[#5B6B6E] text-xs md:text-sm uppercase tracking-widest truncate">{format(new Date(), "EEEE, MMM do")}</span></>
             ) : activeView}
           </div>
           <div className="flex items-center gap-3">
