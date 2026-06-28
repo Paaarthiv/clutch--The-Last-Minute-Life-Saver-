@@ -263,13 +263,7 @@ async function fileToCompressedImage(file: File): Promise<{ mimeType: string; da
   return { mimeType: "image/jpeg", data: out.split(",")[1] };
 }
 
-function PrioritiesColumn({
-  inputRef,
-  showActivity,
-}: {
-  inputRef: React.RefObject<HTMLTextAreaElement>;
-  showActivity: () => void;
-}) {
+function PrioritiesColumn({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElement> }) {
   const { tasks, isThinking, executeAgentAction, runRescue, settings } = useAgent();
   const hasTasks = tasks.some((t) => t.status === "idle");
 
@@ -463,23 +457,6 @@ function PrioritiesColumn({
         </div>
       )}
       </div>
-      <button
-        type="button"
-        onClick={showActivity}
-        onMouseMove={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
-          e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
-        }}
-        title="Jump to agent activity"
-        className="clutch-glass 2xl:hidden absolute bottom-4 right-3 sm:bottom-5 sm:right-5 z-30 h-10 rounded-xl text-white shadow-[0_10px_28px_rgba(19,86,95,0.22)] flex items-center gap-2 px-3.5 text-sm font-semibold active:scale-[0.98] transition-transform"
-      >
-        <span className="cursor-light" aria-hidden="true" />
-        <span className="relative z-10 flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest font-bold">Agent Activity</span>
-          <ChevronsDown className="w-4 h-4" />
-        </span>
-      </button>
     </div>
   );
 }
@@ -505,12 +482,29 @@ function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElemen
   };
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-4 lg:gap-6 px-3 sm:px-4 md:px-8 py-4 md:py-6 h-full overflow-y-auto overflow-x-hidden 2xl:overflow-hidden custom-scrollbar">
-      <PrioritiesColumn inputRef={inputRef} showActivity={showActivity} />
+    <div className="flex-1 min-w-0 relative flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-4 lg:gap-6 px-3 sm:px-4 md:px-8 py-4 md:py-6 h-full overflow-y-auto overflow-x-hidden 2xl:overflow-hidden custom-scrollbar">
+      <PrioritiesColumn inputRef={inputRef} />
       <div className="w-full min-w-0 xl:flex-1 xl:min-w-[420px] 2xl:w-[560px] 2xl:flex-none flex flex-col min-h-0 xl:h-full">
         <TimelineColumn />
       </div>
       <AgentActivityFeed collapsed={activityCollapsed} toggleCollapsed={toggleActivity} activityRef={activityRef} />
+      <button
+        type="button"
+        onClick={showActivity}
+        onMouseMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+          e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+        }}
+        title="Jump to agent activity"
+        className="clutch-glass 2xl:hidden absolute bottom-6 sm:bottom-8 left-1/2 md:left-[48%] xl:left-[41%] -translate-x-1/2 z-30 h-10 rounded-xl text-white shadow-[0_10px_28px_rgba(19,86,95,0.22)] flex items-center gap-2 px-3.5 text-sm font-semibold active:scale-[0.98] transition-transform"
+      >
+        <span className="cursor-light" aria-hidden="true" />
+        <span className="relative z-10 flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-widest font-bold">Agent Activity</span>
+          <ChevronsDown className="w-4 h-4" />
+        </span>
+      </button>
     </div>
   );
 }
