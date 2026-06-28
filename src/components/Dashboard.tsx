@@ -8,7 +8,7 @@ import { format } from "date-fns";
 import clsx from "clsx";
 
 import { ClutchLogo } from "./ClutchLogo";
-import { rescueSpeech, speakText } from "../lib/speak";
+import { planSpeech, rescueSpeech, speakText } from "../lib/speak";
 
 interface TaskCardProps {
   task: any;
@@ -646,10 +646,17 @@ function TimelineColumn() {
       setCalMsg(String(n));
       setCalState("done");
       setTimeout(() => setCalState("idle"), 4000);
-    } catch {
+    } catch (err: any) {
+      const raw = String(err?.message || "");
+      setCalMsg(/invalid_client|client/i.test(raw) ? "Calendar OAuth client is invalid. Redeploy with the current Google OAuth Client ID." : raw || "Calendar sync failed.");
       setCalState("error");
       setTimeout(() => setCalState("idle"), 5000);
     }
+  };
+
+  const listenPlan = () => {
+    if (!schedule.length) return;
+    speakText(planSpeech(tasks, schedule));
   };
 
   const { start: windowStart, end: windowEnd } = displayWindow(settings);
@@ -682,6 +689,12 @@ function TimelineColumn() {
                 <span className="hidden sm:inline">Re-prioritize</span>
               </button>
             )}
+            {schedule.length > 0 && (
+              <button onClick={listenPlan} title="Read today's visible plan aloud" className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1.5 rounded-lg border border-[#20808D]/25 text-[#20808D] hover:bg-[#20808D]/5 transition-colors">
+                <Volume2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Listen</span>
+              </button>
+            )}
             <span className="text-[10px] text-[#20808D] font-bold whitespace-nowrap">{schedule.length} Block(s)</span>
             {calendarClientId && schedule.length > 0 && (
               <button
@@ -694,11 +707,16 @@ function TimelineColumn() {
                 )}
               >
                 <Calendar className={clsx("w-3.5 h-3.5", calState === "syncing" && "animate-pulse")} />
-                {calState === "syncing" ? "Syncing…" : calState === "done" ? `Added ${calMsg} ✓` : calState === "error" ? "Retry" : "Add to Calendar"}
+                {calState === "syncing" ? "Syncing…" : calState === "done" ? `Added ${calMsg} ✓` : calState === "error" ? "Calendar setup" : "Add to Calendar"}
               </button>
             )}
           </div>
         </div>
+        {calState === "error" && calMsg && (
+          <div className="mt-3 rounded-lg border border-[#C2410C]/20 bg-[#C2410C]/[0.06] px-3 py-2 text-[11px] leading-relaxed text-[#9A330A]">
+            {calMsg}
+          </div>
+        )}
       </div>
 
       <div className="timeline-scroll flex-1 overflow-y-auto w-full custom-scrollbar p-4">

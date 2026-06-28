@@ -1,4 +1,4 @@
-import { PrioritizedTask, ReplanState, RescueState } from "../types";
+import { PrioritizedTask, ReplanState, RescueState, ScheduledBlock } from "../types";
 
 let clutchAudio: HTMLAudioElement | null = null;
 let clutchAudioUrl: string | null = null;
@@ -97,7 +97,57 @@ export function replanSpeech(replan: ReplanState, titleOf?: (id: string) => stri
   ].filter(Boolean).join(" ");
 }
 
-export function planSpeech(tasks: PrioritizedTask[]): string {
+function parseHM(hm?: string): number | null {
+  if (!hm || !/^\d{2}:\d{2}$/.test(hm)) return null;
+  const [h, m] = hm.split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h + m / 60;
+}
+
+function fmt12(hm?: string): string {
+  const parsed = parseHM(hm);
+  if (parsed == null) return hm || "";
+  const normalized = ((parsed % 24) + 24) % 24;
+  const h24 = Math.floor(normalized);
+  const m = Math.round((normalized - h24) * 60);
+  const ap = h24 < 12 ? "AM" : "PM";
+  const h12 = h24 % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${ap}`;
+}
+
+function sortedBlocks(schedule: ScheduledBlock[]): ScheduledBlock[] {
+  return [...schedule].sort((a, b) => (parseHM(a.startTime) ?? 0) - (parseHM(b.startTime) ?? 0));
+}
+
+export function planSpeech(tasks: PrioritizedTask[], schedule: ScheduledBlock[] = []): string {
+  const blocks = sortedBlocks(schedule);
+  if (blocks.length) {
+    const now = new Date();
+    const nowDec = now.getHours() + now.getMinutes() / 60;
+    const withRange = blocks.map((block) => {
+      const start = parseHM(block.startTime) ?? 0;
+      let end = parseHM(block.endTime) ?? start + 0.5;
+      if (end <= start) end += 24;
+      const comparableNow = end > 24 && nowDec < start ? nowDec + 24 : nowDec;
+      return { block, start, end, comparableNow };
+    });
+    const current = withRange.find((item) => item.comparableNow >= item.start && item.comparableNow < item.end);
+    const upcoming = withRange.find((item) => item.start > item.comparableNow) || withRange[0];
+    const preview = (current ? [current, ...withRange.filter((item) => item.start > current.start)] : withRange).slice(0, 4);
+
+    return [
+      "Your today's plan is ready.",
+      current
+        ? `Right now, focus on ${current.block.title} until ${fmt12(current.block.endTime)}.`
+        : upcoming
+          ? `First up at ${fmt12(upcoming.block.startTime)}, ${upcoming.block.title}.`
+          : "",
+      preview.length
+        ? `Your next blocks are ${preview.map((item) => `${fmt12(item.block.startTime)}, ${item.block.title}`).join("; ")}.`
+        : "",
+    ].filter(Boolean).join(" ");
+  }
+
   const active = tasks.filter((task) => task.status === "idle");
   const now = active.filter((task) => task.category === "NOW" && !task.parentId);
   const next = active.filter((task) => task.category === "NEXT" && !task.parentId);

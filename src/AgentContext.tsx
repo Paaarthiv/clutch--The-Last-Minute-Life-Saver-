@@ -477,13 +477,16 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       }
 
       let nextTasksForSpeech: PrioritizedTask[] | null = null;
+      let nextScheduleForSpeech: ScheduledBlock[] | null = null;
       if (data.tasks) {
         const cleanedTasks = removeConflictingNewTaskPins(previousSchedule, previousTasks, data.tasks, settings, text, actionTrigger);
         const breakdownSchedule = splitScheduleForBreakdown(previousSchedule, previousTasks, cleanedTasks);
         const nextTasks = breakdownSchedule?.tasks || cleanedTasks;
+        const nextSchedule = breakdownSchedule?.schedule || buildSchedule(nextTasks, settings);
         nextTasksForSpeech = nextTasks;
+        nextScheduleForSpeech = nextSchedule;
         setTasks(nextTasks);
-        setSchedule(breakdownSchedule?.schedule || buildSchedule(nextTasks, settings));
+        setSchedule(nextSchedule);
       }
       if (data.replan) {
         setReplanState(data.replan);
@@ -513,7 +516,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         } else if (data.replan) {
           speakText(replanSpeech(data.replan, titleOf));
         } else if (nextTasksForSpeech && !isBreakdownOnly) {
-          speakText(planSpeech(nextTasksForSpeech));
+          speakText(planSpeech(nextTasksForSpeech, nextScheduleForSpeech || []));
         }
       }
     } catch (e) {
