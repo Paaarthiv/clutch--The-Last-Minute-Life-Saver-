@@ -934,15 +934,15 @@ function AgentActivityFeed({
     <div ref={activityRef} className="w-full 2xl:flex-shrink-0 flex 2xl:pl-4 2xl:border-l 2xl:border-[#EDEAE2]" style={isWide && !collapsed ? { width } : undefined}>
       {/* Content column */}
       <div className="w-full max-w-[420px] 2xl:max-w-none flex-1 min-w-0 flex flex-col gap-4 2xl:h-full">
-        <div className="flex items-center justify-between shrink-0">
-          <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold">Agent Activity</div>
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={toggleCollapsed}
-            title={collapsed ? "Show activity" : "Collapse activity"}
-            className="hidden 2xl:flex w-7 h-7 -mr-1 rounded-lg items-center justify-center text-[#9AA7A9] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors"
+            title="Collapse activity"
+            className="flex w-7 h-7 rounded-lg items-center justify-center text-[#9AA7A9] hover:text-[#13343B] hover:bg-[#F2F0EA] transition-colors shrink-0"
           >
-            {collapsed ? <ChevronsLeft className="w-4 h-4" /> : <ChevronsRight className="w-4 h-4" />}
+            <ChevronsRight className="w-4 h-4" />
           </button>
+          <div className="text-[11px] uppercase tracking-widest text-[#9AA7A9] font-bold min-w-0">Agent Activity</div>
         </div>
 
         {collapsed && (
