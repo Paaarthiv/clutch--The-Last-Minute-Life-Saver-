@@ -265,10 +265,8 @@ async function fileToCompressedImage(file: File): Promise<{ mimeType: string; da
 
 function PrioritiesColumn({
   inputRef,
-  showActivity,
 }: {
   inputRef: React.RefObject<HTMLTextAreaElement>;
-  showActivity: () => void;
 }) {
   const { tasks, isThinking, executeAgentAction, runRescue, settings } = useAgent();
   const hasTasks = tasks.some((t) => t.status === "idle");
@@ -348,7 +346,7 @@ function PrioritiesColumn({
   }, []);
 
   return (
-    <div ref={columnRef} className="w-full min-w-0 xl:flex-1 xl:min-w-[360px] xl:h-full min-h-[520px] relative flex flex-col items-center justify-center overflow-hidden px-3 sm:px-4 py-8 sm:py-10">
+    <div ref={columnRef} className="w-full min-w-0 flex-1 xl:min-w-[360px] h-full min-h-[580px] relative flex flex-col items-center justify-center overflow-hidden px-4 sm:px-6 py-10 sm:py-12">
       {/* Decorative task-pill cloud behind the command bar (hidden when the column is narrow). */}
       {showPills && (
       <div className="absolute inset-x-0 top-10 bottom-0 pointer-events-none select-none opacity-70">
@@ -463,23 +461,6 @@ function PrioritiesColumn({
         </div>
       )}
       </div>
-      <button
-        type="button"
-        onClick={showActivity}
-        onMouseMove={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
-          e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
-        }}
-        title="Jump to agent activity"
-        className="clutch-glass 2xl:hidden absolute bottom-5 right-4 sm:bottom-6 sm:right-6 xl:right-8 z-30 h-10 rounded-xl text-white shadow-[0_10px_28px_rgba(19,86,95,0.22)] flex items-center gap-2 px-3.5 text-sm font-semibold active:scale-[0.98] transition-transform"
-      >
-        <span className="cursor-light" aria-hidden="true" />
-        <span className="relative z-10 flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest font-bold">Agent Activity</span>
-          <ChevronsDown className="w-4 h-4" />
-        </span>
-      </button>
     </div>
   );
 }
@@ -506,7 +487,7 @@ function TodayBoard({ inputRef }: { inputRef: React.RefObject<HTMLTextAreaElemen
 
   return (
     <div className="flex-1 min-w-0 relative flex flex-col xl:flex-row xl:flex-wrap 2xl:flex-nowrap gap-4 lg:gap-6 px-3 sm:px-4 md:px-8 py-4 md:py-6 h-full overflow-y-auto overflow-x-hidden 2xl:overflow-hidden custom-scrollbar">
-      <PrioritiesColumn inputRef={inputRef} showActivity={showActivity} />
+      <PrioritiesColumn inputRef={inputRef} />
       <div className="w-full min-w-0 xl:flex-1 xl:min-w-[420px] 2xl:w-[560px] 2xl:flex-none flex flex-col min-h-0 xl:h-full">
         <TimelineColumn />
       </div>
