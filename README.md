@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./public/readme/clutch-banner.png" alt="Clutch project banner" width="100%" />
+
 # Clutch
 
 ### The Last-Minute Life Saver
