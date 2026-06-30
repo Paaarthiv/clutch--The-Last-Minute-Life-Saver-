@@ -4,81 +4,166 @@
 
 ### The Last-Minute Life Saver
 
-**An autonomous AI productivity agent that turns a messy brain-dump into a prioritized, time-blocked, self-correcting plan.**
+Clutch is an AI productivity companion that turns a chaotic brain-dump into a prioritized, time-blocked, action-ready plan before deadlines slip.
 
-[Live Application](https://clutch-433410067334.asia-south1.run.app/) · [GitHub Repository](https://github.com/Paaarthiv/clutch--The-Last-Minute-Life-Saver-)
+[![Live on Cloud Run](https://img.shields.io/badge/Live-Google%20Cloud%20Run-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://clutch-433410067334.asia-south1.run.app/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=0B1720)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-111827?style=for-the-badge)](./LICENSE)
 
-Built for **Vibe2Ship 2026** by Coding Ninjas 10X Club x Google for Developers  
-Problem Statement 1: **The Last-Minute Life Saver**
+Built by **Parthiv A M** for **Vibe2Ship 2026** by Coding Ninjas 10X Club x Google for Developers.
+
+[Live App](https://clutch-433410067334.asia-south1.run.app/) | [Submission Notes](./SUBMISSION.md) | [Deployment Guide](./DEPLOYMENT.md)
 
 </div>
 
 ---
 
-## Overview
+## Table of Contents
 
-Students, professionals, and entrepreneurs often miss deadlines not because they do not care, but because passive reminders do not help them decide what to do next. Clutch solves that problem by acting as an AI-powered deadline-defense companion.
+- [Why Clutch](#why-clutch)
+- [What It Does](#what-it-does)
+- [Agentic Workflow](#agentic-workflow)
+- [Key Features](#key-features)
+- [Google Technologies](#google-technologies)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+- [Local Development](#local-development)
+- [Deployment](#deployment)
+- [Security Notes](#security-notes)
+- [Demo Flow](#demo-flow)
+- [Project Structure](#project-structure)
+- [License](#license)
 
-Users can brain-dump tasks in plain language, speak them, or upload a photo of a handwritten or whiteboard task list. Clutch uses Gemini to structure the mess into tasks, prioritize them into NOW / NEXT / LATER, break down large goals, and create a realistic schedule around working hours, fixed commitments, and peak-focus windows.
+## Why Clutch
 
-When the user falls behind, Clutch Mode runs an emergency triage: it tells the user the first physical step to take, what to keep, what to move, what to drop, and can speak the rescue plan aloud.
+Most productivity tools remind users that a deadline exists. That is useful, but it does not answer the harder question:
 
-## Why This Is an Agent
+> What should I do right now, with the time and energy I actually have left?
 
-Clutch is not a chatbot wrapper. The backend runs an iterative Gemini function-calling loop. Gemini receives a toolset, decides which tool to call, the server executes that action, and the result is fed back into the next reasoning turn until the plan is complete.
+Clutch is built for that moment. It helps students, professionals, founders, and makers turn scattered tasks into a concrete plan. It can parse messy input, prioritize work, protect fixed commitments, break down large goals, rebuild the timeline, and run an emergency rescue mode when the day starts falling apart.
 
-| Tool | Autonomous action |
+## What It Does
+
+Clutch accepts plain text, voice input, or an image of a task list. It then:
+
+1. Extracts structured tasks from messy input.
+2. Ranks them into `NOW`, `NEXT`, and `LATER`.
+3. Builds a realistic time-blocked Today plan.
+4. Preserves fixed-time commitments like "gym from 6 PM to 8 PM".
+5. Breaks large tasks into smaller subtasks.
+6. Syncs the generated plan to Google Calendar.
+7. Speaks rescue and planning summaries aloud.
+8. Persists user state with Firestore.
+
+## Agentic Workflow
+
+Clutch is more than a prompt-to-text wrapper. The backend runs a Gemini function-calling loop where the model chooses tools, the server applies those actions, and the updated state is fed back into the next reasoning step.
+
+```mermaid
+flowchart LR
+  A["User brain-dump, voice, or image"] --> B["Express API"]
+  B --> C["Gemini agent loop"]
+  C --> D["create_tasks"]
+  C --> E["prioritize"]
+  C --> F["breakdown_goal"]
+  C --> G["replan"]
+  C --> H["rescue_triage"]
+  D --> I["Deterministic scheduler"]
+  E --> I
+  F --> I
+  G --> I
+  H --> I
+  I --> J["Today plan"]
+  J --> K["Firestore"]
+  J --> L["Google Calendar"]
+  J --> M["Cloud Text-to-Speech"]
+```
+
+### Agent Tools
+
+| Tool | Purpose |
 | --- | --- |
-| `create_tasks` | Converts text, voice, or image brain-dumps into structured tasks with estimates, deadlines, importance, and cognitive load. |
-| `breakdown_goal` | Splits a large task into ordered subtasks. |
-| `prioritize` | Ranks tasks into NOW / NEXT / LATER with a short reason. |
-| `replan` | Suggests keep / move / drop decisions when plans change. |
-| `rescue_triage` | Powers Clutch Mode with an emergency first step and rescue shortlist. |
+| `create_tasks` | Converts text, voice, or image brain-dumps into structured tasks. |
+| `prioritize` | Ranks work into `NOW`, `NEXT`, and `LATER` with short reasons. |
+| `breakdown_goal` | Splits large goals into ordered, smaller subtasks. |
+| `replan` | Rebuilds the plan when tasks change, move, drop, or complete. |
+| `rescue_triage` | Powers Clutch Mode, the emergency "what do I do now?" workflow. |
 
-After the AI reasoning step, a deterministic scheduler builds the timeline. It respects fixed-time tasks, supports planning windows that cross midnight, prioritizes deep work during the peak-energy window, and resolves overlaps.
+After the AI step, a deterministic scheduler creates the final timeline. This keeps the plan reliable: fixed commitments stay fixed, overlapping blocks are resolved, peak-energy windows are respected, and generated subtasks stay inside the intended time slot.
 
 ## Key Features
 
-- Brain-dump to structured task plan using Gemini.
-- Voice input for fast task capture.
-- Gemini Vision support for handwritten or whiteboard task lists.
-- NOW / NEXT / LATER prioritization with reasons.
-- Goal breakdown into subtasks.
-- Energy-aware time-blocked schedule.
-- Fixed-time commitment handling, such as "gym 6 PM to 8 PM".
-- Clutch Mode emergency rescue flow.
-- Spoken rescue summaries using Google Cloud Text-to-Speech.
-- Google Calendar sync for planned blocks.
-- Firestore persistence for tasks, settings, archive, and state.
-- Live Agent Activity feed showing what the agent is doing.
-- Polished landing page and responsive dashboard experience.
+- **Brain-dump planning**: Type one messy paragraph and Clutch turns it into structured tasks.
+- **Voice capture**: Dictate tasks directly into the planner.
+- **Image-to-task support**: Upload a photo of a handwritten or whiteboard task list using Gemini Vision.
+- **NOW / NEXT / LATER prioritization**: See what matters immediately and what can wait.
+- **Time-blocked Today plan**: Convert priorities into a schedule with start and end times.
+- **Fixed commitment protection**: Handles tasks like "interview at 3 PM" or "gym 6 PM to 8 PM".
+- **Goal breakdown**: Split large tasks into smaller steps without destroying the existing timeline.
+- **Clutch Mode**: Emergency triage for overwhelmed moments.
+- **Agent voice**: Spoken plan and rescue summaries via Cloud Text-to-Speech.
+- **Google Calendar sync**: Add generated schedule blocks to Calendar.
+- **Firestore persistence**: Tasks, schedule, settings, archive, and activity survive reloads.
+- **Agent Activity feed**: Shows what the agent just did so the experience feels transparent.
+- **Responsive dashboard**: Desktop, laptop, tablet, and mobile-friendly interface.
 
-## Google Technologies Used
+## Google Technologies
 
-| Google technology | Usage |
+| Google technology | How Clutch uses it |
 | --- | --- |
-| Google AI Studio | Gemini API key, model experimentation, and primary AI development workflow. |
-| Google Gemini API | Agent reasoning, prioritization, planning, replanning, and rescue triage. |
-| Gemini Vision | Reads task lists from images. |
+| Google AI Studio | Gemini API setup, model testing, and rapid AI iteration. |
+| Gemini API | Agent reasoning, task extraction, prioritization, replanning, and rescue mode. |
+| Gemini Vision | Reads task lists from uploaded images. |
 | Google Cloud Run | Hosts the deployed full-stack application. |
-| Google Cloud Build | Builds the application from source for Cloud Run. |
-| Artifact Registry | Stores built Cloud Run container images. |
-| Secret Manager | Stores the Gemini API key securely. |
-| Firestore | Persists user state and settings. |
-| Cloud Text-to-Speech | Speaks Clutch Mode and agent summaries aloud. |
-| Google Calendar API | Adds generated schedule blocks to the user's calendar. |
-| Google Fonts | Typography for the landing page and app UI. |
+| Cloud Build | Builds and deploys the app from source. |
+| Artifact Registry | Stores Cloud Run container images. |
+| Secret Manager | Stores the Gemini API key outside source code. |
+| Firestore | Persists user state, settings, archive, tasks, and schedules. |
+| Cloud Text-to-Speech | Speaks plan summaries and Clutch Mode responses. |
+| Google Calendar API | Adds generated plan blocks to the user's calendar. |
+| Google Fonts | Provides polished typography across the app. |
 
 ## Tech Stack
 
-| Layer | Technologies |
+| Layer | Stack |
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Motion, lucide-react, date-fns |
 | Backend | Node.js, Express, TypeScript, esbuild |
 | AI | `@google/genai`, Gemini 2.5 Flash |
-| Google Cloud | Cloud Run, Cloud Build, Artifact Registry, Secret Manager, Firestore, Cloud Text-to-Speech, Calendar API |
+| Cloud | Cloud Run, Cloud Build, Artifact Registry, Secret Manager, Firestore, Cloud Text-to-Speech, Calendar API |
 
-## Local Setup
+## Architecture
+
+```text
+Browser
+  |
+  | React dashboard, landing page, Google OAuth, speech input
+  v
+Express server on Cloud Run
+  |
+  | /api/agent       -> Gemini function-calling loop
+  | /api/tts         -> Cloud Text-to-Speech audio
+  | /api/state/*     -> Firestore persistence
+  | /api/config      -> runtime Calendar OAuth config
+  v
+Google Cloud services
+  |
+  | Gemini API, Firestore, Secret Manager, Cloud TTS, Calendar API
+```
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+- Gemini API key
+- Optional: Google OAuth Client ID for Calendar sync
+- Optional: Google Cloud credentials for Firestore and Cloud Text-to-Speech locally
+
+### Install
 
 ```bash
 git clone https://github.com/Paaarthiv/clutch--The-Last-Minute-Life-Saver-.git
@@ -86,25 +171,40 @@ cd clutch--The-Last-Minute-Life-Saver-
 npm install
 ```
 
+### Configure environment
+
 Create `.env.local`:
 
 ```bash
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.5-flash
-GOOGLE_CALENDAR_CLIENT_ID=your_calendar_oauth_client_id
+GOOGLE_CALENDAR_CLIENT_ID=your_google_oauth_client_id
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+APP_URL=http://localhost:3000
 ```
 
-Run locally:
+### Run
 
 ```bash
 npm run dev
 ```
 
-The app runs at `http://localhost:3000`.
+Open `http://localhost:3000`.
+
+### Validate
+
+```bash
+npm run lint
+npm run build
+```
 
 ## Deployment
 
-The final deployable link must be hosted on Google Cloud. This project is Cloud Run-ready.
+The hackathon version is deployed on Google Cloud Run:
+
+[https://clutch-433410067334.asia-south1.run.app/](https://clutch-433410067334.asia-south1.run.app/)
+
+Cloud Run deploy command:
 
 ```bash
 gcloud run deploy clutch \
@@ -116,47 +216,65 @@ gcloud run deploy clutch \
   --set-secrets GEMINI_API_KEY=gemini-api-key:latest
 ```
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full Cloud Shell guide.
-
-## Submission Demo Flow
-
-1. Brain-dump multiple tasks at once, including one fixed-time commitment such as "gym 6 PM to 8 PM".
-2. Show the Agent Activity feed creating and prioritizing tasks.
-3. Show the main Today plan with NOW / NEXT / LATER and the timeline.
-4. Break down a large task such as "Exam prep".
-5. Add the plan to Google Calendar.
-6. Trigger Clutch Mode and show the spoken rescue summary.
-7. Drop or complete a task and show replanning.
-8. Reload the page to show Firestore persistence.
-
-## Repository Structure
-
-```text
-.
-├── server.ts
-├── src/
-│   ├── AgentContext.tsx
-│   ├── components/
-│   │   ├── Dashboard.tsx
-│   │   ├── IntroScreen.tsx
-│   │   └── ParticleSphere.tsx
-│   ├── lib/
-│   └── types.ts
-├── public/
-├── DEPLOYMENT.md
-├── SUBMISSION.md
-├── Dockerfile
-└── package.json
-```
+For the full Cloud Shell walkthrough, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Security Notes
 
-- Gemini API key is loaded from environment variables or Secret Manager.
-- `.env.local` is git-ignored.
-- Cloud Run receives `GEMINI_API_KEY` through Secret Manager, not source code.
-- Basic request size limits, rate limits, and security headers are implemented on the Express server.
-- Calendar access uses Google OAuth in the browser and requests Calendar event scope only.
+- API keys are not stored in source code.
+- Cloud Run receives `GEMINI_API_KEY` through Secret Manager.
+- `.env.local` is ignored for local development.
+- Express disables `x-powered-by`.
+- Security headers include `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, and `Permissions-Policy`.
+- Route-level rate limiting protects `/api/agent`, `/api/tts`, and state endpoints.
+- Image input is validated by MIME type and size before being sent to Gemini Vision.
+- Google Calendar uses browser OAuth and requests Calendar event scope only.
+
+## Demo Flow
+
+Use this flow to show the complete product:
+
+1. Brain-dump tasks such as "learn Git, learn Linux, buy groceries, gym from 6 PM to 8 PM".
+2. Watch Agent Activity create and prioritize tasks.
+3. Show the Today plan with timed `NOW`, `NEXT`, and `LATER` blocks.
+4. Break down a large task like "Exam prep".
+5. Add the generated schedule to Google Calendar.
+6. Trigger Clutch Mode and listen to the spoken rescue plan.
+7. Complete, archive, or drop a task and watch the plan adjust.
+8. Reload to demonstrate Firestore persistence.
+
+## Project Structure
+
+```text
+.
+|-- server.ts
+|-- src
+|   |-- AgentContext.tsx
+|   |-- App.tsx
+|   |-- components
+|   |   |-- ClutchLogo.tsx
+|   |   |-- Dashboard.tsx
+|   |   |-- IntroScreen.tsx
+|   |   `-- ParticleSphere.tsx
+|   |-- lib
+|   |   `-- speak.ts
+|   |-- main.tsx
+|   `-- types.ts
+|-- public
+|   `-- built_with_google
+|-- DEPLOYMENT.md
+|-- SUBMISSION.md
+|-- Dockerfile
+|-- package.json
+`-- vite.config.ts
+```
+
+## Author
+
+**Parthiv A M**
+
+- GitHub: [@Paaarthiv](https://github.com/Paaarthiv)
+- Project: [Clutch - The Last-Minute Life Saver](https://github.com/Paaarthiv/clutch--The-Last-Minute-Life-Saver-)
 
 ## License
 
-Built for the Vibe2Ship 2026 hackathon. All rights reserved by the author.
+This project is licensed under the [MIT License](./LICENSE).
